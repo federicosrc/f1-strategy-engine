@@ -134,6 +134,31 @@ section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:non
   .bench-vs { min-width:0; }
 }
 
+
+.projected-top {
+  display:grid;
+  grid-template-columns:1.25fr .8fr .8fr .8fr .8fr;
+  gap:10px;
+  margin:7px 0 10px;
+  padding:12px 14px;
+  border:1px solid #2b3944;
+  border-left:6px solid #37e77b;
+  border-radius:8px;
+  background:linear-gradient(110deg,#0c1717,#0a1015 55%,#101116);
+  box-shadow:0 8px 28px rgba(0,0,0,.16), inset 0 0 28px rgba(55,231,123,.035);
+}
+.projected-main { display:flex; align-items:center; gap:16px; min-height:98px; }
+.projected-main .position { font-size:78px; line-height:.9; font-weight:1000; letter-spacing:-.07em; color:#f6f7f9; }
+.projected-main .label { color:#8d9aa7; font-size:9px; letter-spacing:.15em; text-transform:uppercase; font-weight:900; }
+.projected-main .expected { color:#37e77b; font-size:14px; font-weight:950; margin-top:5px; }
+.projected-kpi { border-left:1px solid #26323d; padding:8px 12px; display:flex; flex-direction:column; justify-content:center; }
+.projected-kpi .k { color:#8d9aa7; font-size:8px; text-transform:uppercase; letter-spacing:.1em; }
+.projected-kpi .v { color:#f6f7f9; font-size:25px; font-weight:950; margin-top:5px; }
+.projected-kpi .s { color:#8d9aa7; font-size:9px; margin-top:3px; }
+@media(max-width:1100px){
+  .projected-top{grid-template-columns:1fr 1fr}
+  .projected-main{grid-column:1/-1}
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -244,7 +269,13 @@ incident=float((analysis_data or {}).get("incident_risk") or sc_prob); sc_prob=m
 deg=(analysis_data or {}).get("degradation",{}); soft_deg=float(deg.get("SOFT",.12)); medium_deg=float(deg.get("MEDIUM",.08)); hard_deg=float(deg.get("HARD",.055)); undercut=min(.95,.48+overtaking*.35+max(0,medium_deg-.06)*.7)
 inventory=(analysis_data or {}).get("inventory") or {"SOFT":{"new":1,"used":1},"MEDIUM":{"new":1,"used":1},"HARD":{"new":1,"used":1}}
 tyres={"SOFT":TyreModel("SOFT",-.55,soft_deg),"MEDIUM":TyreModel("MEDIUM",0.0,medium_deg),"HARD":TyreModel("HARD",.45,hard_deg)}
-provisional_inputs=SimulationInputs(CircuitProfile(race_laps,pit_loss,pit_loss*.55,overtaking,undercut,track_temp),DriverContext(selected_driver,(analysis_data or {}).get("team_name",""),grid,pace_delta),tyres,inventory,sc_prob,rain_prob,simulations,mandatory_race_compounds=("HARD","MEDIUM"))
+provisional_inputs=SimulationInputs(
+    CircuitProfile(race_laps,pit_loss,pit_loss*.55,overtaking,undercut,track_temp),
+    DriverContext(selected_driver,(analysis_data or {}).get("team_name",""),grid,pace_delta),
+    tyres,inventory,sc_prob,rain_prob,simulations,
+    mandatory_race_compounds=("HARD","MEDIUM"),
+    rivals=(analysis_data or {}).get("grid_model") or None,
+)
 
 # Dynamic stint selectors filtered by regulation + available sets, kept on the same input row.
 s2_options=legal_next_compounds([start_compound],stops+1,provisional_inputs) or [c for c in ("SOFT","MEDIUM","HARD") if total_sets(inventory,c)>0]
@@ -284,7 +315,13 @@ if simulate_clicked or optimal_clicked:
     grid=int((analysis_data or {}).get("grid_position") or 10); pace_delta=float((analysis_data or {}).get("pace_delta") or 0.0); incident=float((analysis_data or {}).get("incident_risk") or sc_prob); sc_prob=min(.75,max(.12,.55*sc_prob+.45*incident))
     deg=(analysis_data or {}).get("degradation",{}); soft_deg=float(deg.get("SOFT",soft_deg)); medium_deg=float(deg.get("MEDIUM",medium_deg)); hard_deg=float(deg.get("HARD",hard_deg)); inventory=(analysis_data or {}).get("inventory") or inventory
     tyres={"SOFT":TyreModel("SOFT",-.55,soft_deg),"MEDIUM":TyreModel("MEDIUM",0.0,medium_deg),"HARD":TyreModel("HARD",.45,hard_deg)}; undercut=min(.95,.48+overtaking*.35+max(0,medium_deg-.06)*.7)
-    final_inputs=SimulationInputs(CircuitProfile(race_laps,pit_loss,pit_loss*.55,overtaking,undercut,track_temp),DriverContext(selected_driver,(analysis_data or {}).get("team_name",""),grid,pace_delta),tyres,inventory,sc_prob,rain_prob,simulations,mandatory_race_compounds=("HARD","MEDIUM"))
+    final_inputs=SimulationInputs(
+        CircuitProfile(race_laps,pit_loss,pit_loss*.55,overtaking,undercut,track_temp),
+        DriverContext(selected_driver,(analysis_data or {}).get("team_name",""),grid,pace_delta),
+        tyres,inventory,sc_prob,rain_prob,simulations,
+        mandatory_race_compounds=("HARD","MEDIUM"),
+        rivals=(analysis_data or {}).get("grid_model") or None,
+    )
     valid,reasons=validate_strategy(selected_compounds,final_inputs)
     anchor=selected_compounds
     if not valid:
@@ -300,6 +337,31 @@ if simulate_clicked or optimal_clicked:
 
 result=st.session_state.get("strategy_result"); result_key_now=f"{analysis_key}:{'-'.join(selected_compounds)}:{simulations}"
 if st.session_state.get("strategy_result_key")!=result_key_now: result=None
+
+# Put the estimated finish immediately below the controls: this is the primary answer.
+if result is not None:
+    model_conf=result.get("race_model_confidence","low").upper()
+    competitors=result.get("competitors_modelled",0)
+    projection_html=f"""
+    <div class="projected-top">
+      <div class="projected-main">
+        <div>
+          <div class="label">Estimated final position</div>
+          <div class="position">P{result["most_likely_finish"]}</div>
+        </div>
+        <div>
+          <div class="label">Monte Carlo expected finish</div>
+          <div class="expected">P{result["expected_finish"]:.1f}</div>
+          <div style="color:#8d9aa7;font-size:9px;margin-top:4px">{competitors} rivals modelled · {model_conf} confidence</div>
+        </div>
+      </div>
+      <div class="projected-kpi"><div class="k">Points</div><div class="v">{result["points_probability"]:.0%}</div><div class="s">P10 or better</div></div>
+      <div class="projected-kpi"><div class="k">Top 5</div><div class="v">{result["top5_probability"]:.0%}</div><div class="s">P5 or better</div></div>
+      <div class="projected-kpi"><div class="k">Podium</div><div class="v">{result["podium_probability"]:.0%}</div><div class="s">P1–P3</div></div>
+      <div class="projected-kpi"><div class="k">Win</div><div class="v">{result["win_probability"]:.0%}</div><div class="s">P1</div></div>
+    </div>
+    """
+    st.markdown(projection_html,unsafe_allow_html=True)
 
 with st.expander("Low-confidence overrides",expanded=False):
     st.caption("Correct remaining tyre sets here if you have the official Pirelli/FIA list.")
@@ -340,38 +402,7 @@ else:
     optimal = result["optimal"]
     delta = float(result["delta_to_optimal_s"])
 
-    panel_title("Final outcome")
-    final_html = f"""
-    <div class="final-outcome">
-      <div class="final-main">
-        <div class="k">Most likely finishing position</div>
-        <div class="p">P{result["most_likely_finish"]}</div>
-        <div class="s">Expected position: P{result["expected_finish"]:.1f}</div>
-      </div>
-      <div class="outcome-mini">
-        <div class="k">Points chance</div>
-        <div class="v">{result["points_probability"]:.0%}</div>
-        <div class="s">Finish P10 or better</div>
-      </div>
-      <div class="outcome-mini">
-        <div class="k">Top 5</div>
-        <div class="v">{result["top5_probability"]:.0%}</div>
-        <div class="s">Finish P5 or better</div>
-      </div>
-      <div class="outcome-mini">
-        <div class="k">Podium</div>
-        <div class="v">{result["podium_probability"]:.0%}</div>
-        <div class="s">Finish P1–P3</div>
-      </div>
-      <div class="outcome-mini">
-        <div class="k">Win</div>
-        <div class="v">{result["win_probability"]:.0%}</div>
-        <div class="s">Finish P1</div>
-      </div>
-    </div>
-    """
-    st.markdown(final_html, unsafe_allow_html=True)
-
+    # Detailed strategy panels follow; primary projected finish is shown above.
     strategy_col, benchmark_col, scenario_col = st.columns([1.0, 1.25, 0.9], gap="small")
 
     with strategy_col:
@@ -557,6 +588,7 @@ else:
                     f'FastF1 {(analysis_data or {}).get("practice_name", "practice")}',
                     (analysis_data or {}).get("degradation_confidence", "low"),
                 ),
+                ("Full-grid race outcome", f'FastF1 field model · {result.get("competitors_modelled",0)} rivals', result.get("race_model_confidence","low")),
                 ("Remaining tyre sets", "Inference / override", "low"),
                 ("Dry strategy legality", "2026 FIA sporting-rule logic", "high"),
             ]
@@ -567,4 +599,4 @@ else:
             )
 
 
-st.caption("Strategy Engine V1.5.1 · Current season only · User-selected dry strategy · FIA legality filter · Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · FastF1 driver/weekend analytics.")
+st.caption("Strategy Engine V1.6 · Current season only · User-selected dry strategy · FIA legality filter · Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · FastF1 driver/weekend analytics.")

@@ -1,4 +1,4 @@
-# F1 Strategy Engine — V1.5.1
+# F1 Strategy Engine — V1.6
 
 V1.5 removes OpenF1 from pre-race mode.
 
@@ -43,3 +43,25 @@ Keep:
 - Replaces the ambiguous strategy-cost histogram with a direct Your plan vs Best plan benchmark.
 - Explains the meaning of strategy cost.
 - Keeps the Monte Carlo finish-position distribution and labels its purpose explicitly.
+
+
+## V1.6 — full-grid race outcome engine
+
+The estimated finishing position is no longer calculated by converting a time penalty into an arbitrary number of positions.
+
+FastF1 now builds a current-weekend model of the field:
+- qualifying/grid position
+- compound-normalised long-run pace delta
+- team/driver identity
+- data-confidence flags
+
+For every Monte Carlo run:
+1. the selected driver's chosen strategy produces a simulated race-time score;
+2. every rival samples a competitive legal strategy;
+3. each rival's long-run pace is accumulated over the full race distance;
+4. grid position, traffic/execution variance, SC/rain effects and DNF risk are applied;
+5. simulated race times are ordered to create the finishing classification.
+
+The app then reports the actual Monte Carlo finishing-position distribution.
+
+The estimated final position is now displayed immediately below the strategy controls.

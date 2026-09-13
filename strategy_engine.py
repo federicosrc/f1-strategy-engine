@@ -48,6 +48,7 @@ class SimulationInputs:
     simulations: int = 30000
     objective: str = "Best expected finish"
     mandatory_race_compounds: tuple[str, ...] = ("HARD", "MEDIUM")
+    rivals: list[dict[str, Any]] | None = None
 
 
 def _robust_slope(x, y):
@@ -304,19 +305,220 @@ def _strategy_name(compounds: list[str]) -> str:
     return "→".join(c[0] for c in compounds)
 
 
-def _expected_finish_distribution(
+
+def _softmax_from_costs(costs: np.ndarray, temperature: float = 5.5) -> np.ndarray:
+    costs = np.asarray(costs, dtype=float)
+    scores = -(costs - np.nanmin(costs)) / max(0.5, temperature)
+    scores = scores - np.nanmax(scores)
+    weights = np.exp(scores)
+    return weights / weights.sum()
+
+
+def _synthetic_rivals(inputs: SimulationInputs) -> list[dict[str, Any]]:
+    """Fallback grid used only when current-weekend opponent data are unavailable."""
+    total = 22
+    selected_grid = int(np.clip(inputs.driver.grid_position, 1, total))
+    rows = []
+    pace_steps = np.linspace(0.0, 1.45, total)
+    for pos in range(1, total + 1):
+        if pos == selected_grid:
+            continue
+        # Grid position is used only to produce a conservative fallback ordering.
+        pace = float(pace_steps[min(total - 1, pos - 1)])
+        rows.append({
+            "driver_name": f"Rival {pos}",
+            "abbreviation": f"R{pos}",
+            "team_name": "",
+            "grid_position": pos,
+            "race_pace_delta": pace,
+            "pace_confidence": "low",
+            "grid_confidence": "low",
+        })
+    return rows
+
+
+def _generic_rival_strategy_pool(
+    inputs: SimulationInputs,
+    n: int,
+    seed: int = 7711,
+) -> tuple[np.ndarray, np.ndarray, list[list[str]]]:
+    """Build a reusable stochastic strategy pool for the field.
+
+    Rivals are not assumed to all run the same strategy. Each simulation samples
+    from competitive legal strategies, weighted by their expected strategic cost.
+    """
+    neutral_inputs = SimulationInputs(
+        circuit=inputs.circuit,
+        driver=DriverContext(
+            driver_name="Neutral rival",
+            team_name="",
+            grid_position=10,
+            race_pace_delta=0.0,
+            team_risk=0.50,
+        ),
+        tyres=inputs.tyres,
+        tyre_sets={
+            "SOFT": {"new": 2, "used": 1},
+            "MEDIUM": {"new": 2, "used": 1},
+            "HARD": {"new": 2, "used": 1},
+        },
+        sc_probability=inputs.sc_probability,
+        rain_probability=inputs.rain_probability,
+        simulations=n,
+        mandatory_race_compounds=inputs.mandatory_race_compounds,
+        rivals=None,
+    )
+
+    candidates = enumerate_legal_strategies(neutral_inputs, start_compound=None, stops=(1, 2))
+    arrays = []
+    means = []
+    kept = []
+
+    for idx, seq in enumerate(candidates):
+        pits, lengths, _ = optimise_pit_laps(seq, neutral_inputs)
+        rng = np.random.default_rng(seed + idx * 103)
+        arr = _simulate_cost(seq, lengths, neutral_inputs, rng, n)
+        arrays.append(arr)
+        means.append(float(np.mean(arr)))
+        kept.append(seq)
+
+    if not arrays:
+        # This should never happen with the permissive inventory above.
+        fallback = np.zeros((n, 1), dtype=float)
+        return fallback, np.array([1.0]), [["MEDIUM", "HARD"]]
+
+    matrix = np.vstack(arrays).T
+    means_arr = np.asarray(means, dtype=float)
+
+    # Keep only reasonably competitive strategies; a real field will not choose
+    # obviously dominated plans at equal tyre availability.
+    cutoff = float(np.min(means_arr) + 13.0)
+    mask = means_arr <= cutoff
+    matrix = matrix[:, mask]
+    means_arr = means_arr[mask]
+    kept = [seq for seq, keep in zip(kept, mask) if keep]
+
+    probabilities = _softmax_from_costs(means_arr, temperature=5.8)
+    return matrix, probabilities, kept
+
+
+def _full_grid_finish_distribution(
     selected_costs: np.ndarray,
-    best_costs: np.ndarray,
     inputs: SimulationInputs,
     rng: np.random.Generator,
-) -> np.ndarray:
-    grid = float(np.clip(inputs.driver.grid_position, 1, 22))
-    pace_penalty = max(0.0, inputs.driver.race_pace_delta) * 3.8
-    strategy_penalty = np.maximum(0.0, selected_costs - best_costs) / 6.8
-    race_noise = rng.normal(0.0, 1.35 + 0.55 * inputs.circuit.overtaking_difficulty, size=len(selected_costs))
-    finishes = np.rint(grid + pace_penalty + strategy_penalty + race_noise)
-    return np.clip(finishes, 1, 22).astype(int)
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Convert simulated race times into finishing positions by racing the full field.
 
+    Position is now obtained by ordering simulated race-time scores for the
+    selected driver and every rival. It is no longer inferred from a
+    seconds-to-positions conversion.
+    """
+    n = len(selected_costs)
+    selected_name = inputs.driver.driver_name.strip().lower()
+
+    raw_rivals = inputs.rivals or []
+    rivals = []
+    for row in raw_rivals:
+        name = str(row.get("driver_name", "")).strip()
+        if name and name.lower() == selected_name:
+            continue
+        if row.get("race_pace_delta") is None:
+            continue
+        rivals.append(dict(row))
+
+    using_synthetic = len(rivals) < 8
+    if using_synthetic:
+        rivals = _synthetic_rivals(inputs)
+
+    total_cars = len(rivals) + 1
+
+    # Common strategic menu for the rest of the field.
+    strategy_matrix, strategy_probs, _ = _generic_rival_strategy_pool(inputs, n)
+
+    # Selected driver race-time score. Strategy simulation already contains the
+    # selected driver's race-pace delta across the race.
+    selected_grid = int(np.clip(inputs.driver.grid_position, 1, total_cars))
+    grid_time_factor = 0.11 + 0.10 * inputs.circuit.overtaking_difficulty
+    selected_time = selected_costs.copy()
+    selected_time += (selected_grid - 1) * grid_time_factor
+    selected_time += rng.normal(0.0, 0.55, size=n)
+
+    # Small DNF model. This is deliberately conservative and shared by all cars.
+    selected_dnf_p = float(np.clip(
+        0.030 + 0.035 * inputs.sc_probability + 0.070 * inputs.rain_probability,
+        0.025,
+        0.16,
+    ))
+    selected_dnf = rng.random(n) < selected_dnf_p
+
+    rival_times = np.empty((n, len(rivals)), dtype=float)
+
+    for j, rival in enumerate(rivals):
+        # Each rival independently samples from the competitive strategy pool.
+        choice = rng.choice(strategy_matrix.shape[1], size=n, p=strategy_probs)
+        race_strategy = strategy_matrix[np.arange(n), choice].copy()
+
+        pace_delta = float(max(0.0, rival.get("race_pace_delta", 0.8)))
+        grid_position = rival.get("grid_position")
+        try:
+            grid_position = int(grid_position)
+        except Exception:
+            grid_position = min(total_cars, j + 1)
+
+        # The long-run delta is converted into race-time delta directly:
+        # 0.20 s/lap over 57 laps = 11.4 s, not an arbitrary number of positions.
+        race_strategy += pace_delta * inputs.circuit.race_laps
+        race_strategy += (max(1, grid_position) - 1) * grid_time_factor
+
+        # Driver/team execution variance: starts, traffic, stop execution and pace noise.
+        race_strategy += rng.normal(
+            0.0,
+            1.25 + 0.75 * inputs.circuit.overtaking_difficulty,
+            size=n,
+        )
+
+        rival_dnf_p = float(np.clip(
+            0.035 + 0.040 * inputs.sc_probability + 0.075 * inputs.rain_probability,
+            0.03,
+            0.18,
+        ))
+        rival_dnf = rng.random(n) < rival_dnf_p
+        race_strategy[rival_dnf] = np.inf
+        rival_times[:, j] = race_strategy
+
+    finishes = 1 + np.sum(rival_times < selected_time[:, None], axis=1)
+    finishes = finishes.astype(int)
+
+    # A selected-driver DNF is placed at the back of the simulated field.
+    finishes[selected_dnf] = total_cars
+
+    real_pace_count = sum(
+        1 for r in rivals
+        if str(r.get("pace_confidence", "")).lower() in {"high", "medium"}
+    )
+    real_grid_count = sum(
+        1 for r in rivals
+        if str(r.get("grid_confidence", "")).lower() in {"high", "medium"}
+        or r.get("grid_position") is not None
+    )
+
+    if using_synthetic:
+        confidence = "low"
+    elif real_pace_count >= max(14, int(0.70 * len(rivals))) and real_grid_count >= max(14, int(0.70 * len(rivals))):
+        confidence = "high"
+    elif real_pace_count >= 8:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    meta = {
+        "competitors_modelled": len(rivals),
+        "field_size": total_cars,
+        "race_model_confidence": confidence,
+        "synthetic_grid": using_synthetic,
+        "selected_dnf_probability": selected_dnf_p,
+    }
+    return finishes, meta
 
 def simulate_selected_strategy(
     inputs: SimulationInputs,
@@ -373,7 +575,7 @@ def simulate_selected_strategy(
     optimal_probability = float(np.mean(np.argmin(matrix, axis=1) == selected_idx)) if selected_idx is not None else 0.0
 
     finish_rng = np.random.default_rng(99173)
-    finishes = _expected_finish_distribution(selected_costs, per_run_best, inputs, finish_rng)
+    finishes, race_meta = _full_grid_finish_distribution(selected_costs, inputs, finish_rng)
 
     expected_finish = float(np.mean(finishes))
     finish_mode = int(pd.Series(finishes).mode().iloc[0])
@@ -403,9 +605,14 @@ def simulate_selected_strategy(
         "optimal_probability": optimal_probability,
         "finish_distribution": {
             int(pos): float(np.mean(finishes == pos))
-            for pos in range(1, 23)
+            for pos in range(1, int(np.max(finishes)) + 1)
             if np.any(finishes == pos)
         },
+        "competitors_modelled": race_meta["competitors_modelled"],
+        "field_size": race_meta["field_size"],
+        "race_model_confidence": race_meta["race_model_confidence"],
+        "synthetic_grid": race_meta["synthetic_grid"],
+        "selected_dnf_probability": race_meta["selected_dnf_probability"],
         "optimal": optimal,
         "alternatives": sorted(alt_rows, key=lambda r: r["expected_cost_s"]),
     }

@@ -223,6 +223,97 @@ class FastF1DataClient:
 
         return float(np.average(deltas, weights=weights)) if deltas else 0.0
 
+
+    @staticmethod
+    def _all_driver_pace(session):
+        """Race-pace deltas for the complete field, compound-normalised."""
+        if session is None or session.laps is None or session.laps.empty:
+            return {}
+
+        clean = FastF1DataClient._clean_laps(session.laps)
+        if clean.empty or "Driver" not in clean or "Compound" not in clean:
+            return {}
+
+        evidence = {}
+        for compound, cg in clean.groupby(clean["Compound"].astype(str).str.upper()):
+            if compound not in {"SOFT", "MEDIUM", "HARD"}:
+                continue
+            grouped = cg.groupby("Driver")["lap_seconds"].agg(["median", "count"])
+            grouped = grouped[grouped["count"] >= 4]
+            if grouped.empty:
+                continue
+
+            ref = float(grouped["median"].min())
+            for driver, row in grouped.iterrows():
+                evidence.setdefault(str(driver), []).append(
+                    (max(0.0, float(row["median"] - ref)), float(row["count"]))
+                )
+
+        pace = {}
+        for driver, values in evidence.items():
+            deltas = [v[0] for v in values]
+            weights = [v[1] for v in values]
+            pace[driver] = float(np.average(deltas, weights=weights))
+        return pace
+
+    def _qualifying_grid_all(self, year, round_number):
+        try:
+            session = self._load_session(year, round_number, "Q", load_laps=False)
+            results = session.results
+            grid = {}
+            if results is None or len(results) == 0:
+                return grid, "low"
+
+            for _, row in results.iterrows():
+                abbr = str(row.get("Abbreviation", "")).strip()
+                if not abbr:
+                    continue
+                pos = row.get("Position")
+                try:
+                    pos = int(float(pos)) if pd.notna(pos) else None
+                except Exception:
+                    pos = None
+                grid[abbr] = {
+                    "grid_position": pos,
+                    "driver_name": str(row.get("FullName", "")).strip(),
+                    "team_name": str(row.get("TeamName", "")).strip(),
+                }
+            return grid, "medium" if grid else "low"
+        except Exception:
+            return {}, "low"
+
+    @staticmethod
+    def _build_grid_model(session, pace_map, qualifying_grid, grid_confidence):
+        if session is None or session.results is None or len(session.results) == 0:
+            return []
+
+        known_paces = list(pace_map.values())
+        fallback_pace = float(np.median(known_paces) + 0.65) if known_paces else 0.85
+        rows = []
+
+        for idx, (_, row) in enumerate(session.results.iterrows(), start=1):
+            abbr = str(row.get("Abbreviation", "")).strip()
+            if not abbr:
+                continue
+
+            q = qualifying_grid.get(abbr, {})
+            full_name = q.get("driver_name") or str(row.get("FullName", "")).strip() or abbr
+            team_name = q.get("team_name") or str(row.get("TeamName", "")).strip()
+            grid_pos = q.get("grid_position")
+            pace = pace_map.get(abbr, fallback_pace)
+
+            rows.append({
+                "driver_name": full_name,
+                "abbreviation": abbr,
+                "team_name": team_name,
+                "grid_position": grid_pos,
+                "race_pace_delta": float(max(0.0, pace)),
+                "pace_confidence": "medium" if abbr in pace_map else "low",
+                "grid_confidence": grid_confidence if grid_pos is not None else "low",
+            })
+
+        return rows
+
     @staticmethod
     def _incident_prior(session):
         try:
@@ -291,6 +382,8 @@ class FastF1DataClient:
             },
             "practice_rows": 0,
             "sessions_used": [],
+            "grid_model": [],
+            "grid_model_confidence": "low",
         }
         if not self.available:
             return fallback
@@ -330,8 +423,26 @@ class FastF1DataClient:
         merged = pd.concat(datasets, ignore_index=True) if datasets else pd.DataFrame()
         degradation = estimate_degradation_from_practice(merged)
         rows = len(merged)
-        grid, grid_conf = self._qualifying_position(year, round_number, selected_driver)
+
+        pace_map = self._all_driver_pace(best_session)
+        qualifying_grid, all_grid_conf = self._qualifying_grid_all(year, round_number)
+        grid_model = self._build_grid_model(best_session, pace_map, qualifying_grid, all_grid_conf)
+
+        selected_abbr = best_match.get("abbreviation", "")
+        best_pace = float(pace_map.get(selected_abbr, best_pace or 0.0))
+
+        selected_grid_row = qualifying_grid.get(selected_abbr, {})
+        grid = selected_grid_row.get("grid_position")
+        grid_conf = all_grid_conf if grid is not None else "low"
+
         incident, incident_conf = self._incident_prior(best_session)
+
+        useful_rivals = sum(
+            1 for r in grid_model
+            if r.get("grid_position") is not None
+            and r.get("pace_confidence") in {"medium", "high"}
+        )
+        grid_model_conf = "high" if useful_rivals >= 16 else "medium" if useful_rivals >= 10 else "low"
 
         fallback.update({
             "available": True,
@@ -349,5 +460,7 @@ class FastF1DataClient:
             "inventory": self._inventory_evidence(driver_laps),
             "practice_rows": int(rows),
             "sessions_used": sessions_used,
+            "grid_model": grid_model,
+            "grid_model_confidence": grid_model_conf,
         })
         return fallback
