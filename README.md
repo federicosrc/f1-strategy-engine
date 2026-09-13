@@ -1,17 +1,18 @@
-# Strategy Engine — V2.1.1
+# Strategy Engine — V2.2
 
-
-V2.1.1 is a UI refinement of V2.1 focused on clarity of inputs and cleaner branding.
+V2.2 refreshes the setup area with a more visual, less heavy interface.
 
 ## What changed
 
-- hidden visible data-source labels in the header and footer
-- moved circuit / Grand Prix selection into the setup area
-- grouped inputs into three thematic rows:
-  1. Weather conditions
-  2. Driver strategy
+- redesigned the setup into three themed visual blocks:
+  1. Weather Conditions
+  2. Driver Strategy
   3. Safety Car / VSC
-- kept the V2.0 / V2.1 simulation engine unchanged
+- added visual side panels with numbered badges
+- added compact summary cards for weather and neutralisation
+- replaced the old strategy-summary dropdown with a proper tyre-plan display
+- kept the simulation engine unchanged
+- hidden visible data-source references
 
 ## GitHub update
 
