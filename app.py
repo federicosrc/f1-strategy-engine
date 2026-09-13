@@ -309,6 +309,68 @@ hr{border-color:#1b2d39!important}
   .target-score .v{font-size:44px}
   .target-facts{grid-template-columns:1fr 1fr}
 }
+
+
+/* V2.5 compact / A4-focused cockpit */
+.block-container{padding:.35rem .65rem 1.0rem;max-width:1500px}
+.topbar{min-height:46px;padding:2px 2px 6px;margin-bottom:2px}
+.brand-title{font-size:21px;line-height:1}
+.brand-sub{font-size:8px}
+.gp-name{font-size:15px}
+.gp-place,.head-meta,.round-box{font-size:8px}
+.mode-wrap{margin:3px 0 6px;padding:4px 8px}
+.setup-shell{padding:6px 10px 0;margin:3px 0 6px}
+.setup-head{margin-bottom:0}
+.setup-title{font-size:12px}
+.setup-caption{font-size:8px}
+.compact-zone{border:1px solid var(--line);border-radius:8px;background:linear-gradient(145deg,rgba(8,16,24,.97),rgba(5,11,17,.94));padding:8px 10px 6px;margin:5px 0}
+.compact-zone-title{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.compact-zone-title .n{width:24px;height:24px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:1000;font-size:13px;color:#fff}
+.compact-zone-title .n.blue{background:linear-gradient(180deg,#2f9dff,#1d69cf)}
+.compact-zone-title .n.red{background:linear-gradient(180deg,#ff5867,#dc1d31)}
+.compact-zone-title .n.yellow{background:linear-gradient(180deg,#ffe14a,#efbe00);color:#11151a}
+.compact-zone-title .t{font-size:11px;font-weight:1000;text-transform:uppercase;letter-spacing:.08em}
+.compact-zone-title .s{font-size:8px;color:#7f909c}
+.compact-divider{height:1px;background:#17303c;margin:6px 0}
+.compact-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+.mini-kpi{border:1px solid #18313d;border-radius:7px;background:#07111a;padding:7px 8px}
+.mini-kpi .k{font-size:7px;color:#80919d;text-transform:uppercase;letter-spacing:.08em}
+.mini-kpi .v{font-size:14px;font-weight:1000;margin-top:2px}
+.mini-kpi .s{font-size:7px;color:#738592;margin-top:1px}
+
+/* radio pills */
+[data-testid="stRadio"] [role="radiogroup"]{gap:6px;flex-wrap:wrap}
+[data-testid="stRadio"] label{background:#07111a;border:1px solid #203744;border-radius:999px;padding:5px 10px!important;min-height:30px}
+[data-testid="stRadio"] label p{font-size:11px!important;font-weight:700!important}
+[data-testid="stRadio"] label:has(input:checked){background:rgba(255,38,56,.10);border-color:#ff3042;box-shadow:0 0 0 1px rgba(255,38,56,.22) inset}
+[data-testid="stRadio"] label:hover{border-color:#ff3042}
+
+/* tabs more compact */
+.stTabs [data-baseweb="tab-list"]{gap:6px}
+.stTabs [data-baseweb="tab"]{height:34px;border-radius:999px;background:#07111a;border:1px solid #223847;padding:0 14px}
+.stTabs [aria-selected="true"]{background:rgba(255,38,56,.08)!important;border-color:#ff3042!important}
+
+.result-shell{margin:5px 0 7px}
+.result-card,.compare-card{padding:9px 11px;min-height:102px}
+.result-title,.compare-title{font-size:12px}
+.result-flex{margin-top:6px}
+.result-pos{font-size:74px}
+.result-kpi .v{font-size:20px}
+.compare-grid{margin-top:12px}
+.summary-card .v{font-size:15px}
+.strategy-plan-card,.inline-card,.info-note-box{padding:9px 10px;min-height:54px}
+.strategy-plan-card .v,.inline-card .v,.info-note-box .v{font-size:11px}
+.panel-tight [data-testid="stVerticalBlockBorderWrapper"]{padding-bottom:0!important}
+.footerline{margin-top:6px}
+
+@media(max-width:1300px){
+  .compact-kpis{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:768px){
+  .block-container{max-width:100%;padding:.25rem .4rem 1.2rem}
+  .compact-kpis{grid-template-columns:1fr 1fr}
+}
+
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -435,15 +497,15 @@ st.markdown(
 # ----------------------------------------------------------------
 # APP MODE
 # ----------------------------------------------------------------
-st.markdown('<div class="mode-wrap">', unsafe_allow_html=True)
-app_mode=st.radio(
+st.markdown('<div class="mode-wrap"><div style="font-size:9px;color:#80919d;text-transform:uppercase;letter-spacing:.10em;margin-bottom:4px">Mode</div></div>', unsafe_allow_html=True)
+app_mode_ui=st.radio(
     "Mode",
-    ["SIMULATE RACE","TARGET OUTCOME"],
+    ["🏎️ Simulate race","🎯 Target outcome"],
     horizontal=True,
     label_visibility="collapsed",
-    key="app_mode",
+    key="app_mode_ui",
 )
-st.markdown('</div>', unsafe_allow_html=True)
+app_mode = "SIMULATE RACE" if app_mode_ui.startswith("🏎️") else "TARGET OUTCOME"
 
 if app_mode=="TARGET OUTCOME":
     st.markdown(
@@ -454,27 +516,27 @@ if app_mode=="TARGET OUTCOME":
         unsafe_allow_html=True,
     )
 
-    target_cols=st.columns([1.45,1.20,.92,.78],gap="small",vertical_alignment="bottom")
+    target_cols=st.columns([1.55,1.25,1.15,.90],gap="small",vertical_alignment="bottom")
     with target_cols[0]:
         target_event_idx=st.selectbox(
-            "Grand Prix / Circuit",
+            "1. Grand Prix",
             range(len(calendar)),
             index=event_idx,
             format_func=lambda i:f'R{calendar[i].get("round","—")} · {calendar[i].get("name","Grand Prix")}',
             key=event_state_key,
         )
     with target_cols[1]:
-        target_driver=st.selectbox("Driver",drivers,index=default_driver_idx,key="target_driver")
+        target_driver=st.selectbox("2. Driver",drivers,index=default_driver_idx,key="target_driver")
     with target_cols[2]:
-        target_goal=st.selectbox(
-            "Target",
-            ["WIN","PODIUM","TOP5","POINTS"],
-            index=2,
-            format_func=lambda x:{"WIN":"Win · P1","PODIUM":"Podium · P1–P3","TOP5":"Top 5 · P1–P5","POINTS":"Points · P1–P10"}[x],
-            key="target_goal",
+        target_goal_ui=st.radio(
+            "3. Target",
+            ["🥇 Win","🏆 Podium","⭐ Top 5","✅ Points"],
+            horizontal=True,
+            key="target_goal_ui",
         )
+        target_goal={"🥇 Win":"WIN","🏆 Podium":"PODIUM","⭐ Top 5":"TOP5","✅ Points":"POINTS"}[target_goal_ui]
     with target_cols[3]:
-        target_run=st.button("Find path to target",use_container_width=True,type="primary")
+        target_run=st.button("Find path",use_container_width=True,type="primary")
 
     target_key=f'{CURRENT_YEAR}:{event["key"]}:{target_driver}:{target_goal}'
 
@@ -676,10 +738,8 @@ if app_mode=="TARGET OUTCOME":
 st.markdown(
     '<div class="setup-shell"><div class="setup-head">'
     '<div><span class="setup-title">Race scenario setup</span>'
-    '<span class="setup-caption">Configure the scenario by theme, then run the simulation</span></div>'
-    '<div><span class="scenario-chip active">Scenario A</span>'
-    '<span class="scenario-chip">Scenario B</span>'
-    '<span class="scenario-chip">Scenario C</span></div>'
+    '<span class="setup-caption">Everything important stays above the fold: define conditions, strategy and race control, then run the model.</span></div>'
+    '<div><span class="scenario-chip active">A</span><span class="scenario-chip">B</span><span class="scenario-chip">C</span></div>'
     '</div></div>',
     unsafe_allow_html=True,
 )
@@ -710,9 +770,17 @@ WEATHER_COLORS={
     "EXPECTED":"#687885","DRY":"#8e7d31","HOT_DRY":"#a75a23","COOL_DRY":"#316c86",
     "CHANGEABLE":"#684785","RAIN":"#195e9a","HEAVY_RAIN":"#0c426f",
 }
+WEATHER_ICONS={
+    "EXPECTED":"📡","DRY":"☀️","HOT_DRY":"🔥","COOL_DRY":"🧊",
+    "CHANGEABLE":"🌦️","RAIN":"🌧️","HEAVY_RAIN":"⛈️",
+}
+WEATHER_UI={k:f'{WEATHER_ICONS[k]} {WEATHER_LABELS[k]}' for k in WEATHER_OPTIONS}
+PROFILE_UI={"STATIC":"1 phase","2_PHASES":"2 phases","3_PHASES":"3 phases"}
+PROFILE_INV={v:k for k,v in PROFILE_UI.items()}
 
 TYRE_ACCENT={"SOFT":"#ff2638","MEDIUM":"#ffd21f","HARD":"#eef2f4","INTERMEDIATE":"#2ed47a","WET":"#2d9cff"}
 TYRE_SHORT={"SOFT":"S","MEDIUM":"M","HARD":"H","INTERMEDIATE":"I","WET":"W"}
+TYRE_ICON={"SOFT":"🔴","MEDIUM":"🟡","HARD":"⚪","INTERMEDIATE":"🟢","WET":"🔵"}
 
 def weather_values(mode):
     if mode=="EXPECTED":
@@ -755,59 +823,48 @@ def strategy_plan_html(compounds):
             pieces.append('<span class="tyre-arrow">→</span>')
     return ''.join(pieces)
 
-# 1) WEATHER CONDITIONS
-weather_section=st.columns([1.05,5.45], gap="small", vertical_alignment="top")
-with weather_section[0]:
-    st.markdown(
-        '<div class="setup-info-panel blue">'
-        '<div class="setup-badge blue">1</div>'
-        '<div class="setup-info-title">Weather conditions</div>'
-        '<div class="setup-info-sub">Set the Grand Prix and define how track conditions evolve throughout the race.</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-with weather_section[1]:
-    with st.container(border=True):
-        st.markdown('<div class="setup-card-title">Scenario builder</div>', unsafe_allow_html=True)
-        top_weather=st.columns([1.35,.82,.92,.72,.92,.72,.92], gap="small", vertical_alignment="bottom")
-        with top_weather[0]:
-            event_idx=st.selectbox(
-                "Grand Prix / Circuit",
-                range(len(calendar)),
-                index=event_idx,
-                format_func=lambda i:f'R{calendar[i].get("round","—")} · {calendar[i].get("name","Grand Prix")}',
-                key=event_state_key,
-            )
-        with top_weather[1]:
-            weather_profile=st.selectbox(
-                "Scenario type",["STATIC","2_PHASES","3_PHASES"],index=2,
-                format_func=lambda x:{"STATIC":"Static","2_PHASES":"2 phases","3_PHASES":"3 phases"}[x],
-                key=f"wp:{event['key']}",
-            )
-        with top_weather[2]:
-            phase1=st.selectbox("Phase 1",WEATHER_OPTIONS,index=1,format_func=lambda x:WEATHER_LABELS[x],key=f"p1:{event['key']}")
-        if weather_profile in {"2_PHASES","3_PHASES"}:
-            switch1_options=list(range(4,max(5,race_laps-5)))
-            default_switch1=max(4,min(race_laps-6,int(round(race_laps*.38))))
-            with top_weather[3]:
-                switch1=st.selectbox("Phase 2 starts",switch1_options,index=switch1_options.index(default_switch1),format_func=lambda x:f"L{x}",key=f"sw1:{event['key']}:{weather_profile}")
-            with top_weather[4]:
-                phase2=st.selectbox("Phase 2",WEATHER_OPTIONS,index=5,format_func=lambda x:WEATHER_LABELS[x],key=f"p2:{event['key']}:{weather_profile}")
-        else:
-            switch1=None; phase2=None
-            with top_weather[3]: st.selectbox("Phase 2 starts", ["—"], disabled=True)
-            with top_weather[4]: st.selectbox("Phase 2", ["—"], disabled=True)
-        if weather_profile=="3_PHASES":
-            switch2_options=list(range(switch1+4,max(switch1+5,race_laps-2)))
-            default_switch2=max(switch1+4,min(race_laps-2,int(round(race_laps*.70))))
-            with top_weather[5]:
-                switch2=st.selectbox("Phase 3 starts",switch2_options,index=switch2_options.index(default_switch2),format_func=lambda x:f"L{x}",key=f"sw2:{event['key']}:{switch1}")
-            with top_weather[6]:
-                phase3=st.selectbox("Phase 3",WEATHER_OPTIONS,index=6,format_func=lambda x:WEATHER_LABELS[x],key=f"p3:{event['key']}:{switch1}")
-        else:
-            switch2=None; phase3=None
-            with top_weather[5]: st.selectbox("Phase 3 starts", ["—"], disabled=True)
-            with top_weather[6]: st.selectbox("Phase 3", ["—"], disabled=True)
+def mini_kpi(label,value,sub=""):
+    st.markdown(f'<div class="mini-kpi"><div class="k">{label}</div><div class="v">{value}</div><div class="s">{sub}</div></div>', unsafe_allow_html=True)
+
+# WEATHER
+with st.container(border=True):
+    st.markdown('<div class="compact-zone-title"><span class="n blue">1</span><div><div class="t">Weather conditions</div><div class="s">Circuit + weather evolution</div></div></div>', unsafe_allow_html=True)
+    top_weather=st.columns([1.55,.85,1.10,.75,1.10,.75,1.10], gap="small", vertical_alignment="bottom")
+    with top_weather[0]:
+        event_idx=st.selectbox(
+            "Grand Prix / Circuit",
+            range(len(calendar)),
+            index=event_idx,
+            format_func=lambda i:f'R{calendar[i].get("round","—")} · {calendar[i].get("name","Grand Prix")}',
+            key=event_state_key,
+        )
+    with top_weather[1]:
+        weather_profile_ui=st.selectbox("Weather layout", list(PROFILE_UI.values()), index=2, key=f"wpui:{event['key']}")
+        weather_profile=PROFILE_INV[weather_profile_ui]
+    with top_weather[2]:
+        phase1=st.selectbox("Phase 1",WEATHER_OPTIONS,index=1,format_func=lambda x:WEATHER_UI[x],key=f"p1:{event['key']}")
+    if weather_profile in {"2_PHASES","3_PHASES"}:
+        switch1_options=list(range(4,max(5,race_laps-5)))
+        default_switch1=max(4,min(race_laps-6,int(round(race_laps*.38))))
+        with top_weather[3]:
+            switch1=st.selectbox("Phase 2 starts",switch1_options,index=switch1_options.index(default_switch1),format_func=lambda x:f"L{x}",key=f"sw1:{event['key']}:{weather_profile}")
+        with top_weather[4]:
+            phase2=st.selectbox("Phase 2",WEATHER_OPTIONS,index=5,format_func=lambda x:WEATHER_UI[x],key=f"p2:{event['key']}:{weather_profile}")
+    else:
+        switch1=None; phase2=None
+        with top_weather[3]: st.selectbox("Phase 2 starts", ["—"], disabled=True)
+        with top_weather[4]: st.selectbox("Phase 2", ["—"], disabled=True)
+    if weather_profile=="3_PHASES":
+        switch2_options=list(range(switch1+4,max(switch1+5,race_laps-2)))
+        default_switch2=max(switch1+4,min(race_laps-2,int(round(race_laps*.70))))
+        with top_weather[5]:
+            switch2=st.selectbox("Phase 3 starts",switch2_options,index=switch2_options.index(default_switch2),format_func=lambda x:f"L{x}",key=f"sw2:{event['key']}:{switch1}")
+        with top_weather[6]:
+            phase3=st.selectbox("Phase 3",WEATHER_OPTIONS,index=6,format_func=lambda x:WEATHER_UI[x],key=f"p3:{event['key']}:{switch1}")
+    else:
+        switch2=None; phase3=None
+        with top_weather[5]: st.selectbox("Phase 3 starts", ["—"], disabled=True)
+        with top_weather[6]: st.selectbox("Phase 3", ["—"], disabled=True)
 
 def make_phase(start_lap,end_lap,mode):
     vals=weather_values(mode)
@@ -834,12 +891,14 @@ air_temp=sum((p["end_lap"]-p["start_lap"]+1)*p["air_temp"] for p in weather_time
 rain_prob=sum((p["end_lap"]-p["start_lap"]+1)*p["rain_probability"] for p in weather_timeline)/weighted_laps
 wind=sum((p["end_lap"]-p["start_lap"]+1)*p["wind"] for p in weather_timeline)/weighted_laps
 humidity=sum((p["end_lap"]-p["start_lap"]+1)*p["humidity"] for p in weather_timeline)/weighted_laps
+weather_compact=' • '.join([f'{WEATHER_ICONS[p["mode"]]} L{p["start_lap"]}–L{p["end_lap"]}' for p in weather_timeline])
 
-with weather_section[1]:
-    inner = st.columns(4, gap="small")
-    labels=[("Track temp", f"{track_temp:.0f}°C", "weighted estimate"), ("Rain", f"{rain_prob:.0%}", "race average"), ("Air temp", f"{air_temp:.0f}°C", "ambient"), ("Wind", f"{wind:.0f} km/h", f"humidity {humidity:.0f}%")]
-    for col, item in zip(inner, labels):
-        with col: summary_card(*item)
+with st.container():
+    weather_summary=st.columns(4,gap="small")
+    with weather_summary[0]: summary_card("Track temp",f"{track_temp:.0f}°C","weighted")
+    with weather_summary[1]: summary_card("Rain",f"{rain_prob:.0%}","race average")
+    with weather_summary[2]: summary_card("Air temp",f"{air_temp:.0f}°C","ambient")
+    with weather_summary[3]: summary_card("Weather map",weather_compact,"scenario flow")
 
 wet_tyres_enabled=any(
     p["mode"] in {"CHANGEABLE","RAIN","HEAVY_RAIN"} or (p["mode"]=="EXPECTED" and p["rain_probability"]>=.20)
@@ -850,27 +909,17 @@ phase1_mode=weather_timeline[0]["mode"]
 default_start="WET" if phase1_mode=="HEAVY_RAIN" else "INTERMEDIATE" if phase1_mode=="RAIN" else "MEDIUM"
 if default_start not in available_compounds: default_start="MEDIUM"
 
-# 2) DRIVER STRATEGY
-strategy_section=st.columns([1.05,5.45], gap="small", vertical_alignment="top")
-with strategy_section[0]:
-    st.markdown(
-        '<div class="setup-info-panel red">'
-        '<div class="setup-badge red">2</div>'
-        '<div class="setup-info-title">Driver strategy</div>'
-        '<div class="setup-info-sub">Choose the driver, tyre sequence and pit-stop timing for the simulated race plan.</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
 simulations=SIMULATION_RUNS
-with strategy_section[1]:
-    with st.container(border=True):
-        st.markdown('<div class="setup-card-title">Strategy inputs</div>', unsafe_allow_html=True)
-        strategy_row=st.columns([1.15,.78,.78,.72,.72,.72,.72], gap="small", vertical_alignment="bottom")
-        with strategy_row[0]:
-            selected_driver=st.selectbox("Driver",drivers,index=default_driver_idx,key="driver_main")
-        with strategy_row[1]:
-            stops=st.selectbox("Stops",[1,2],index=1,format_func=lambda x:f"{x} stop" if x==1 else f"{x} stops",key="stops_main")
+
+# STRATEGY
+with st.container(border=True):
+    st.markdown('<div class="compact-zone-title"><span class="n red">2</span><div><div class="t">Driver strategy</div><div class="s">Driver + stops + tyre sequence</div></div></div>', unsafe_allow_html=True)
+    strategy_section=st.columns([1.45,.72,.82,.82,.82,.78,.78], gap="small", vertical_alignment="bottom")
+    with strategy_section[0]:
+        selected_driver=st.selectbox("Driver",drivers,index=default_driver_idx,key="driver_main")
+    with strategy_section[1]:
+        stops_ui=st.radio("Stops",["1 stop","2 stops"],horizontal=True,key="stops_ui")
+        stops=1 if stops_ui.startswith("1") else 2
 
 analysis_key=f"{CURRENT_YEAR}:{event['key']}:{selected_driver}"
 analysis_data=st.session_state.get("analysis_data") if st.session_state.get("analysis_key")==analysis_key else None
@@ -914,96 +963,84 @@ provisional_inputs=SimulationInputs(
     weather_mode=phase1_mode,weather_timeline=weather_timeline,neutralisation_lap=neutralisation_lap,
 )
 
-with strategy_row[2]:
-    start_compound=st.selectbox("Start tyre",available_compounds,index=available_compounds.index(default_start),key=f"start:{event['key']}:{phase1_mode}")
+fmt_tyre=lambda x:f'{TYRE_ICON.get(x,"⚪")} {x.title()}'
+with strategy_section[2]:
+    start_compound=st.selectbox("Start tyre",available_compounds,index=available_compounds.index(default_start),format_func=fmt_tyre,key=f"start:{event['key']}:{phase1_mode}")
 
 s2_options=legal_next_compounds([start_compound],stops+1,provisional_inputs) or available_compounds
-with strategy_row[3]:
-    stint2=st.selectbox("Stint 2",s2_options,key=f"s2:{analysis_key}:{weather_profile}:{start_compound}:{stops}")
+with strategy_section[3]:
+    stint2=st.selectbox("Stint 2",s2_options,format_func=fmt_tyre,key=f"s2:{analysis_key}:{weather_profile}:{start_compound}:{stops}")
 if stops==2:
     s3_options=legal_next_compounds([start_compound,stint2],3,provisional_inputs) or available_compounds
-    with strategy_row[4]:
-        stint3=st.selectbox("Stint 3",s3_options,key=f"s3:{analysis_key}:{weather_profile}:{start_compound}:{stint2}")
+    with strategy_section[4]:
+        stint3=st.selectbox("Stint 3",s3_options,format_func=fmt_tyre,key=f"s3:{analysis_key}:{weather_profile}:{start_compound}:{stint2}")
 else:
     stint3=None
-    with strategy_row[4]: st.selectbox("Stint 3", ["—"], disabled=True)
+    with strategy_section[4]: st.selectbox("Stint 3", ["—"], disabled=True)
 
 pit1_max=max(4,race_laps-6 if stops==2 else race_laps-2)
 pit1_default=max(3,min(pit1_max,int(round(race_laps*.38))))
 pit1_options=list(range(3,pit1_max+1))
-with strategy_row[5]:
-    pit_lap_1=st.selectbox("Pit lap 1",pit1_options,index=pit1_options.index(pit1_default),format_func=lambda x:f"L{x}",key=f"pit1:{analysis_key}:{stops}")
+with strategy_section[5]:
+    pit_lap_1=st.selectbox("Pit 1",pit1_options,index=pit1_options.index(pit1_default),format_func=lambda x:f"L{x}",key=f"pit1:{analysis_key}:{stops}")
 if stops==2:
     pit2_min=pit_lap_1+3; pit2_max=max(pit2_min,race_laps-2); pit2_options=list(range(pit2_min,pit2_max+1))
     pit2_default=max(pit2_min,min(pit2_max,int(round(race_laps*.70))))
-    with strategy_row[6]:
-        pit_lap_2=st.selectbox("Pit lap 2",pit2_options,index=pit2_options.index(pit2_default),format_func=lambda x:f"L{x}",key=f"pit2:{analysis_key}:{pit_lap_1}")
+    with strategy_section[6]:
+        pit_lap_2=st.selectbox("Pit 2",pit2_options,index=pit2_options.index(pit2_default),format_func=lambda x:f"L{x}",key=f"pit2:{analysis_key}:{pit_lap_1}")
 else:
     pit_lap_2=None
-    with strategy_row[6]: st.selectbox("Pit lap 2", ["—"], disabled=True)
+    with strategy_section[6]: st.selectbox("Pit 2", ["—"], disabled=True)
 
 selected_compounds_preview=[start_compound,stint2]+([stint3] if stops==2 else [])
-with strategy_section[1]:
-    row = st.columns([1.65,1.1,1.1], gap="small")
-    with row[0]:
-        st.markdown(
-            f'<div class="strategy-plan-card"><div class="k">Your strategy</div><div class="v" style="margin-top:10px">{strategy_plan_html(selected_compounds_preview)}</div><div class="s">Tyre sequence selected for the race</div></div>',
-            unsafe_allow_html=True,
-        )
-    with row[1]:
-        stint_text = f'L1–L{pit_lap_1} · ' + (f'L{pit_lap_1+1}–L{pit_lap_2} · L{pit_lap_2+1}–L{race_laps}' if stops==2 else f'L{pit_lap_1+1}–L{race_laps}')
-        inline_card("Stint windows", stint_text, "planned tyre usage")
-    with row[2]:
-        inline_card("Plan type", f'{stops} stop' + ('s' if stops==2 else '') + ' · start on ' + start_compound.title(), "current setup")
-
-# 3) SAFETY CAR / VSC
-safety_section=st.columns([1.05,5.45], gap="small", vertical_alignment="top")
-with safety_section[0]:
+stint_text = f'L1–L{pit_lap_1} · ' + (f'L{pit_lap_1+1}–L{pit_lap_2} · L{pit_lap_2+1}–L{race_laps}' if stops==2 else f'L{pit_lap_1+1}–L{race_laps}')
+strategy_preview=st.columns([1.5,1.15,1.0],gap="small")
+with strategy_preview[0]:
     st.markdown(
-        '<div class="setup-info-panel yellow">'
-        '<div class="setup-badge yellow">3</div>'
-        '<div class="setup-info-title">Safety Car / VSC</div>'
-        '<div class="setup-info-sub">Set if and when the race is neutralised, to test how it changes pit-stop timing.</div>'
-        '</div>',
+        f'<div class="strategy-plan-card"><div class="k">Your strategy</div><div class="v" style="margin-top:8px">{strategy_plan_html(selected_compounds_preview)}</div><div class="s">Tyre sequence</div></div>',
         unsafe_allow_html=True,
     )
-with safety_section[1]:
-    with st.container(border=True):
-        st.markdown('<div class="setup-card-title">Race control inputs</div>', unsafe_allow_html=True)
-        safety_row=st.columns([1.10,.88,2.35], gap="small", vertical_alignment="bottom")
-        with safety_row[0]:
-            neutralisation_mode=st.selectbox(
-                "Safety Car / VSC",["NONE","SC","VSC"],
-                format_func=lambda x:{"NONE":"No SC / VSC","SC":"Safety Car","VSC":"Virtual Safety Car"}[x],
-                key=f"rc:{event['key']}",
-            )
-        if neutralisation_mode in {"SC","VSC"}:
-            neutral_opts=["RANDOM"]+list(range(2,max(3,race_laps-1)))
-            with safety_row[1]:
-                neutral_choice=st.selectbox("Event lap",neutral_opts,format_func=lambda x:"Random" if x=="RANDOM" else f"L{x}",key=f"rclap:{event['key']}:{neutralisation_mode}")
-            neutralisation_lap=None if neutral_choice=="RANDOM" else int(neutral_choice)
-        else:
-            neutralisation_lap=None
-            with safety_row[1]: st.selectbox("Event lap", ["—"], disabled=True)
-        st.session_state[f"rclap_store:{event['key']}"]=neutralisation_lap
-        note_text = (
-            "Green-flag race assumed unless the scenario changes"
-            if neutralisation_mode=="NONE" else
-            f'{"Safety Car" if neutralisation_mode=="SC" else "Virtual Safety Car"} sampled at random timing'
-            if neutralisation_lap is None else
-            f'{"Safety Car" if neutralisation_mode=="SC" else "Virtual Safety Car"} triggered on lap {neutralisation_lap}'
-        )
-        with safety_row[2]:
-            note_box("Race control note", note_text)
-with safety_section[1]:
-    row = st.columns(3, gap="small")
+with strategy_preview[1]:
+    inline_card("Stint windows", stint_text, "planned usage")
+with strategy_preview[2]:
+    inline_card("Plan type", f'{stops} stop' + ('s' if stops==2 else '') + ' · {selected_driver}', "current choice")
+
+# SAFETY / VSC
+with st.container(border=True):
+    st.markdown('<div class="compact-zone-title"><span class="n yellow">3</span><div><div class="t">Safety Car / VSC</div><div class="s">Neutralisation type and timing</div></div></div>', unsafe_allow_html=True)
+    safety_section=st.columns([1.1,.9,2.2], gap="small", vertical_alignment="bottom")
+    with safety_section[0]:
+        neutralisation_ui=st.radio("Safety / VSC",["🟢 None","🚗 Safety Car","⚠️ VSC"],horizontal=True,key=f"rcui:{event['key']}")
+        neutralisation_mode={"🟢 None":"NONE","🚗 Safety Car":"SC","⚠️ VSC":"VSC"}[neutralisation_ui]
+        st.session_state[f"rc:{event['key']}"]=neutralisation_mode
+    if neutralisation_mode in {"SC","VSC"}:
+        neutral_opts=["RANDOM"]+list(range(2,max(3,race_laps-1)))
+        with safety_section[1]:
+            neutral_choice=st.selectbox("Event lap",neutral_opts,format_func=lambda x:"Random" if x=="RANDOM" else f"L{x}",key=f"rclap:{event['key']}:{neutralisation_mode}")
+        neutralisation_lap=None if neutral_choice=="RANDOM" else int(neutral_choice)
+    else:
+        neutralisation_lap=None
+        with safety_section[1]: st.selectbox("Event lap", ["—"], disabled=True)
+    st.session_state[f"rclap_store:{event['key']}"]=neutralisation_lap
+    note_text = (
+        "Green-flag race assumed unless the scenario changes"
+        if neutralisation_mode=="NONE" else
+        f'{"Safety Car" if neutralisation_mode=="SC" else "Virtual Safety Car"} sampled at random timing'
+        if neutralisation_lap is None else
+        f'{"Safety Car" if neutralisation_mode=="SC" else "Virtual Safety Car"} triggered on lap {neutralisation_lap}'
+    )
+    with safety_section[2]:
+        note_box("Race control note", note_text)
+
+    safety_summary=st.columns(3,gap="small")
     items = [
         ("Neutralisation", {"NONE":"None","SC":"Safety Car","VSC":"VSC"}[neutralisation_mode], "event type"),
         ("Timing", "Random" if neutralisation_mode!="NONE" and neutralisation_lap is None else (f"L{neutralisation_lap}" if neutralisation_lap is not None else "—"), "trigger lap"),
         ("Pit-loss effect", "Reduced" if neutralisation_mode!="NONE" else "Normal", "during neutralisation"),
     ]
-    for col, item in zip(row, items):
-        with col: summary_card(*item)
+    for c,it in zip(safety_summary, items):
+        with c: summary_card(*it)
+
 selected_compounds=[start_compound,stint2]+([stint3] if stops==2 else [])
 selected_pit_laps=[pit_lap_1]+([pit_lap_2] if stops==2 else [])
 short_name={"SOFT":"S","MEDIUM":"M","HARD":"H","INTERMEDIATE":"I","WET":"W"}
@@ -1013,9 +1050,9 @@ valid_now,rule_reasons=validate_strategy(selected_compounds,provisional_inputs)
 # Main actions.
 act=st.columns([3.2,1.65,1.65,3.2],gap="small")
 with act[1]:
-    simulate_clicked=st.button("Simulate my strategy",use_container_width=True,type="primary")
+    simulate_clicked=st.button("Simulate",use_container_width=True,type="primary")
 with act[2]:
-    optimal_clicked=st.button("Find optimal strategy",use_container_width=True)
+    optimal_clicked=st.button("Optimal",use_container_width=True)
 
 if simulate_clicked or optimal_clicked:
     with st.spinner(f"Building current-weekend model for {selected_driver}…"):
@@ -1129,13 +1166,67 @@ else:
     )
 
 # ----------------------------------------------------------------
-# RACE TIMELINE + CIRCUIT INFO
+# DETAIL TABS (compact, no long scrolling)
 # ----------------------------------------------------------------
-mid=st.columns([2.9,1.0],gap="small")
+detail_tabs=st.tabs(["🏁 Overview","📈 Timeline","🌦️ Weather & tyres","📋 Final classification"])
 
-TYRE_COLORS={"SOFT":"#ff2638","MEDIUM":"#ffd21f","HARD":"#eef2f4","INTERMEDIATE":"#2ed47a","WET":"#2d9cff"}
+with detail_tabs[0]:
+    ov=st.columns([1.05,.95,1.0],gap="small")
+    with ov[0]:
+        with st.container(border=True):
+            panel_title("Circuit info")
+            st.markdown(f'<div style="font-size:10px;color:#b9c4cc;margin-bottom:5px">{details.get("location",event.get("location",""))}</div>',unsafe_allow_html=True)
+            if details.get("track_image_url"):
+                st.image(details["track_image_url"],use_container_width=True)
+            length=details.get("circuit_length_km"); dist=details.get("race_distance_km")
+            st.markdown(
+                f"""
+                <div class="circuit-kpis">
+                  <div class="circuit-kpi"><div class="k">Length</div><div class="v">{f"{length:.3f} km" if isinstance(length,(float,int)) else "—"}</div></div>
+                  <div class="circuit-kpi"><div class="k">Laps</div><div class="v">{race_laps}</div></div>
+                  <div class="circuit-kpi"><div class="k">Race distance</div><div class="v">{f"{dist:.1f} km" if isinstance(dist,(float,int)) else "—"}</div></div>
+                  <div class="circuit-kpi"><div class="k">Circuit type</div><div class="v">{circuit_type}</div></div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    with ov[1]:
+        with st.container(border=True):
+            panel_title("Key insights")
+            insights=[]
+            wet_phases=[p for p in weather_timeline if p["mode"] in {"CHANGEABLE","RAIN","HEAVY_RAIN"}]
+            if wet_phases:
+                first_wet=wet_phases[0]
+                insights.append(("🌧️",f'{WEATHER_LABELS[first_wet["mode"]]} from lap {first_wet["start_lap"]}',f'Cross-over window near L{max(1,first_wet["start_lap"]-2)}–{first_wet["start_lap"]+2}.'))
+            else:
+                insights.append(("☀️","Dry race profile","Strategy is driven mainly by degradation, undercut power and pit loss."))
+            if neutralisation_mode!="NONE":
+                timing="random timing" if neutralisation_lap is None else f"lap {neutralisation_lap}"
+                insights.append(("🟨",f"{neutral_label.title()} · {timing}","Pit-loss benefit applies only if the stop aligns with the neutralisation window."))
+            else:
+                insights.append(("🟩","No neutralisation selected","All planned stops pay the normal green-flag pit loss."))
+            if result is not None:
+                delta=float(result["delta_to_optimal_s"])
+                if delta>.5:
+                    insights.append(("⏱️",f"~{delta:.1f}s slower than optimum",f'Best same-start plan: {result["optimal"]["strategy"]}, pit {result["optimal"]["pit_window"]}.'))
+                else:
+                    insights.append(("✅","Strategy close to optimum","Your fixed plan is within half a second of the model optimum."))
+                insights.append(("📊",f'Top 5 in {result["top5_probability"]:.0%} of simulations',f'Points {result["points_probability"]:.0%}; podium {result["podium_probability"]:.0%}.'))
+            for icon,title,sub in insights[:4]:
+                st.markdown(f'<div class="insight"><div class="insight-icon">{icon}</div><div><div class="t">{title}</div><div class="s">{sub}</div></div></div>',unsafe_allow_html=True)
+    with ov[2]:
+        with st.container(border=True):
+            panel_title("Weather snapshot")
+            grid=st.columns(2,gap="small")
+            with grid[0]: summary_card("Track temp",f"{track_temp:.0f}°C","weighted")
+            with grid[1]: summary_card("Rain",f"{rain_prob:.0%}","race average")
+            with grid[0]: summary_card("Air temp",f"{air_temp:.0f}°C","ambient")
+            with grid[1]: summary_card("Wind",f"{wind:.0f} km/h",f"humidity {humidity:.0f}%")
+            if result is not None:
+                st.markdown('<div class="compact-divider"></div>', unsafe_allow_html=True)
+                inline_card("Finish position distribution", f'Projected finish around P{result["expected_finish"]:.1f}', f'Most likely outcome: P{result["most_likely_finish"]}')
 
-with mid[0]:
+with detail_tabs[1]:
     with st.container(border=True):
         st.markdown('<div class="panel-title">Race timeline <span class="timeline-note">Tyres, weather, pit stops and race events</span></div>',unsafe_allow_html=True)
         tf=go.Figure()
@@ -1173,7 +1264,7 @@ with mid[0]:
             tf.add_vline(x=pit,line_width=1.5,line_dash="dot",line_color="#f8fbfd")
             tf.add_annotation(x=pit,y="Your strategy",text=f"PIT<br>L{pit}",showarrow=False,yshift=-23,font=dict(size=8,color="#e6edf2"))
         tf.update_layout(
-            height=245,barmode="overlay",bargap=.25,margin=dict(l=105,r=12,t=23,b=30),
+            height=220,barmode="overlay",bargap=.25,margin=dict(l=95,r=12,t=23,b=30),
             paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#dce5eb",size=9),
             xaxis=dict(title="Lap",range=[0,race_laps],dtick=max(5,int(round(race_laps/10))),gridcolor="#17303c",zeroline=False,side="top"),
             yaxis=dict(categoryarray=["Weather","Safety Car / VSC","Your strategy"],categoryorder="array",autorange="reversed",gridcolor="rgba(0,0,0,0)"),
@@ -1181,133 +1272,83 @@ with mid[0]:
         )
         st.plotly_chart(tf,use_container_width=True,config={"displayModeBar":False})
 
-with mid[1]:
-    with st.container(border=True):
-        panel_title("Circuit info")
-        st.markdown(f'<div style="font-size:11px;color:#b9c4cc;margin-bottom:5px">{details.get("location",event.get("location",""))}</div>',unsafe_allow_html=True)
-        if details.get("track_image_url"):
-            st.image(details["track_image_url"],use_container_width=True)
-        length=details.get("circuit_length_km"); dist=details.get("race_distance_km")
-        st.markdown(
-            f"""
-            <div class="circuit-kpis">
-              <div class="circuit-kpi"><div class="k">Length</div><div class="v">{f"{length:.3f} km" if isinstance(length,(float,int)) else "—"}</div></div>
-              <div class="circuit-kpi"><div class="k">Laps</div><div class="v">{race_laps}</div></div>
-              <div class="circuit-kpi"><div class="k">Race distance</div><div class="v">{f"{dist:.1f} km" if isinstance(dist,(float,int)) else "—"}</div></div>
-              <div class="circuit-kpi"><div class="k">Circuit type</div><div class="v">{circuit_type}</div></div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-# ----------------------------------------------------------------
-# WEATHER CHART + TYRE PERFORMANCE + KEY INSIGHTS
-# ----------------------------------------------------------------
-lower=st.columns([1.45,.78,.78],gap="small")
-
-with lower[0]:
-    with st.container(border=True):
-        panel_title("Weather & track evolution")
-        laps=list(range(1,race_laps+1))
-        temp_series=[]; rain_series=[]
-        for lap in laps:
-            ph=next((p for p in weather_timeline if p["start_lap"]<=lap<=p["end_lap"]),weather_timeline[-1])
-            temp_series.append(ph["track_temp"])
-            rain_series.append(ph["rain_probability"]*100)
-        wf=go.Figure()
-        wf.add_trace(go.Scatter(x=laps,y=temp_series,mode="lines",name="Track temperature",line=dict(color="#ff313c",width=2.2),hovertemplate="L%{x}: %{y:.0f}°C<extra></extra>"))
-        wf.add_trace(go.Bar(x=laps,y=rain_series,name="Rain intensity",marker_color="#2479d1",opacity=.65,yaxis="y2",hovertemplate="L%{x}: %{y:.0f}% wet exposure<extra></extra>"))
-        wf.update_layout(
-            height=260,margin=dict(l=45,r=45,t=10,b=35),
-            paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#cbd5dc",size=8),
-            xaxis=dict(title="Lap",gridcolor="#17303c",zeroline=False),
-            yaxis=dict(title="Track temp °C",gridcolor="#17303c",zeroline=False),
-            yaxis2=dict(title="Rain %",overlaying="y",side="right",range=[0,100],showgrid=False),
-            legend=dict(orientation="h",y=1.12,x=.62,font=dict(size=8)),
-        )
-        st.plotly_chart(wf,use_container_width=True,config={"displayModeBar":False})
-
-with lower[1]:
-    with st.container(border=True):
-        panel_title("Tyre performance (est.)")
-        rows=[
-            ("SOFT","S",soft_deg,"-0.55s","Dry / quali"),
-            ("MEDIUM","M",medium_deg,"Reference","Dry"),
-            ("HARD","H",hard_deg,"+0.45s","Dry / long run"),
-        ]
-        if wet_tyres_enabled:
-            rows += [
-                ("INTERMEDIATE","I",.035,"Wet-specialist","Damp / rain"),
-                ("WET","W",.022,"Heavy-wet","Heavy rain"),
-            ]
-        tr=""
-        for name,abbr,dg,pace,use in rows:
-            cls="c-"+name.lower()
-            tr+=f'<tr><td><span class="tyre-dot {cls}">{abbr}</span>{name.title()}</td><td>{dg:.3f}</td><td>{pace}</td><td>{use}</td></tr>'
-        st.markdown(
-            '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tyre-table"><thead><tr><th>Compound</th><th>Deg s/lap</th><th>Relative pace</th><th>Best use</th></tr></thead>'
-            f'<tbody>{tr}</tbody></table></div>',
-            unsafe_allow_html=True,
-        )
-
-with lower[2]:
-    with st.container(border=True):
-        panel_title("Key insights")
-        insights=[]
-        wet_phases=[p for p in weather_timeline if p["mode"] in {"CHANGEABLE","RAIN","HEAVY_RAIN"}]
-        if wet_phases:
-            first_wet=wet_phases[0]
-            insights.append(("🌧️",f'{WEATHER_LABELS[first_wet["mode"]]} from lap {first_wet["start_lap"]}',f'Optimal crossover window depends on tyre choice near L{max(1,first_wet["start_lap"]-2)}–{first_wet["start_lap"]+2}.'))
-        else:
-            insights.append(("☀️","Dry race profile","Strategy is driven mainly by degradation, undercut power and pit loss."))
-        if neutralisation_mode!="NONE":
-            timing="random timing" if neutralisation_lap is None else f"lap {neutralisation_lap}"
-            insights.append(("🟨",f"{neutral_label.title()} · {timing}",f"Pit-loss benefit applies only when a stop aligns with the neutralisation window."))
-        else:
-            insights.append(("🟩","No neutralisation selected","All planned stops pay the normal green-flag pit loss."))
-        if result is not None:
-            delta=float(result["delta_to_optimal_s"])
-            if delta>.5:
-                insights.append(("⏱️",f"Strategy loses ~{delta:.1f}s vs optimum",f'Best same-start plan: {result["optimal"]["strategy"]}, pit {result["optimal"]["pit_window"]}.'))
-            else:
-                insights.append(("✅","Strategy close to optimum","Your fixed plan is within half a second of the model optimum."))
-            insights.append(("📊",f'Top 5 in {result["top5_probability"]:.0%} of simulations',f'Points probability {result["points_probability"]:.0%}; podium {result["podium_probability"]:.0%}.'))
-        for icon,title,sub in insights[:4]:
-            st.markdown(f'<div class="insight"><div class="insight-icon">{icon}</div><div><div class="t">{title}</div><div class="s">{sub}</div></div></div>',unsafe_allow_html=True)
-
-# ----------------------------------------------------------------
-# ESTIMATED CLASSIFICATION
-# ----------------------------------------------------------------
-with st.container(border=True):
-    panel_title("Estimated final classification (race simulation)")
-    if result is None:
-        st.info("Run the simulation to populate the projected classification.")
-    else:
-        standings=result.get("estimated_classification",[])
-        rows_html=[]
-        for row in standings:
-            selected_class=" selected" if row.get("selected_driver") else ""
-            team=row.get("team_name") or "—"
-            grid_value=f'P{row["grid_position"]}' if row.get("grid_position") else "—"
-            rows_html.append(
-                f'<div class="stand-row{selected_class}">'
-                f'<div class="stand-pos">{row["projected_position"]}</div>'
-                f'<div class="stand-driver">{row["driver_name"]}</div>'
-                f'<div class="stand-team stand-team-col">{team}</div>'
-                f'<div class="stand-num">{grid_value}</div>'
-                f'<div class="stand-num">P{row["expected_finish"]:.1f}</div>'
-                f'<div class="stand-num">{row["podium_probability"]:.0%}</div>'
-                f'<div class="stand-num">{row["points_probability"]:.0%}</div>'
-                f'</div>'
+with detail_tabs[2]:
+    lower=st.columns([1.4,.9],gap="small")
+    with lower[0]:
+        with st.container(border=True):
+            panel_title("Weather & track evolution")
+            laps=list(range(1,race_laps+1))
+            temp_series=[]; rain_series=[]
+            for lap in laps:
+                ph=next((p for p in weather_timeline if p["start_lap"]<=lap<=p["end_lap"]),weather_timeline[-1])
+                temp_series.append(ph["track_temp"])
+                rain_series.append(ph["rain_probability"]*100)
+            wf=go.Figure()
+            wf.add_trace(go.Scatter(x=laps,y=temp_series,mode="lines",name="Track temperature",line=dict(color="#ff313c",width=2.0),hovertemplate="L%{x}: %{y:.0f}°C<extra></extra>"))
+            wf.add_trace(go.Bar(x=laps,y=rain_series,name="Rain intensity",marker_color="#2479d1",opacity=.65,yaxis="y2",hovertemplate="L%{x}: %{y:.0f}% wet exposure<extra></extra>"))
+            wf.update_layout(
+                height=240,margin=dict(l=45,r=45,t=10,b=32),
+                paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#cbd5dc",size=8),
+                xaxis=dict(title="Lap",gridcolor="#17303c",zeroline=False),
+                yaxis=dict(title="Track temp °C",gridcolor="#17303c",zeroline=False),
+                yaxis2=dict(title="Rain %",overlaying="y",side="right",range=[0,100],showgrid=False),
+                legend=dict(orientation="h",y=1.10,x=.50,font=dict(size=8)),
             )
-        st.markdown(
-            '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><div class="standings">'
-            '<div class="stand-head"><div>Pos</div><div>Driver</div><div class="stand-team-col">Team</div>'
-            '<div style="text-align:right">Grid</div><div style="text-align:right">Expected</div>'
-            '<div style="text-align:right">Podium</div><div style="text-align:right">Points</div></div>'
-            +''.join(rows_html)+'</div></div>',
-            unsafe_allow_html=True,
-        )
+            st.plotly_chart(wf,use_container_width=True,config={"displayModeBar":False})
+    with lower[1]:
+        with st.container(border=True):
+            panel_title("Tyre performance (est.)")
+            rows=[
+                ("SOFT","S",soft_deg,"-0.55s","Dry / quali"),
+                ("MEDIUM","M",medium_deg,"Reference","Dry"),
+                ("HARD","H",hard_deg,"+0.45s","Dry / long run"),
+            ]
+            if wet_tyres_enabled:
+                rows += [
+                    ("INTERMEDIATE","I",.035,"Wet-specialist","Damp / rain"),
+                    ("WET","W",.022,"Heavy-wet","Heavy rain"),
+                ]
+            tr=""
+            for name,abbr,dg,pace,use in rows:
+                cls="c-"+name.lower()
+                tr+=f'<tr><td><span class="tyre-dot {cls}">{abbr}</span>{name.title()}</td><td>{dg:.3f}</td><td>{pace}</td><td>{use}</td></tr>'
+            st.markdown(
+                '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tyre-table"><thead><tr><th>Compound</th><th>Deg s/lap</th><th>Relative pace</th><th>Best use</th></tr></thead>'
+                f'<tbody>{tr}</tbody></table></div>',
+                unsafe_allow_html=True,
+            )
+
+with detail_tabs[3]:
+    with st.container(border=True):
+        panel_title("Estimated final classification (race simulation)")
+        if result is None:
+            st.info("Run the simulation to populate the projected classification.")
+        else:
+            standings=result.get("estimated_classification",[])
+            rows_html=[]
+            for row in standings:
+                selected_class=" selected" if row.get("selected_driver") else ""
+                team=row.get("team_name") or "—"
+                grid_value=f'P{row["grid_position"]}' if row.get("grid_position") else "—"
+                rows_html.append(
+                    f'<div class="stand-row{selected_class}">'
+                    f'<div class="stand-pos">{row["projected_position"]}</div>'
+                    f'<div class="stand-driver">{row["driver_name"]}</div>'
+                    f'<div class="stand-team stand-team-col">{team}</div>'
+                    f'<div class="stand-num">{grid_value}</div>'
+                    f'<div class="stand-num">P{row["expected_finish"]:.1f}</div>'
+                    f'<div class="stand-num">{row["podium_probability"]:.0%}</div>'
+                    f'<div class="stand-num">{row["points_probability"]:.0%}</div>'
+                    f'</div>'
+                )
+            st.markdown(
+                '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><div class="standings">'
+                '<div class="stand-head"><div>Pos</div><div>Driver</div><div class="stand-team-col">Team</div>'
+                '<div style="text-align:right">Grid</div><div style="text-align:right">Expected</div>'
+                '<div style="text-align:right">Podium</div><div style="text-align:right">Points</div></div>'
+                +''.join(rows_html)+'</div></div>',
+                unsafe_allow_html=True,
+            )
 
 with st.expander("Low-confidence overrides",expanded=False):
     st.caption("Correct pit-lane loss or tyre availability only if you have more authoritative weekend data.")
@@ -1322,6 +1363,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.4 · Simulate. Analyse. Be ready.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.5 · Compact. Clear. Race-ready.</div></div>',
     unsafe_allow_html=True,
 )
