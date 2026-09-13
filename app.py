@@ -466,6 +466,163 @@ button[kind="primary"]:hover{box-shadow:0 12px 26px rgba(184,11,26,.42),0 0 20px
   .start-lights .light{width:10px;height:10px}
 }
 
+
+
+/* V2.7 — deeper racing / pit-wall skin */
+:root{
+  --race-red:#ff2038;
+  --race-red-dark:#9f0917;
+  --race-yellow:#ffd21f;
+  --race-cyan:#39c8ff;
+  --race-green:#31df8a;
+  --race-panel:#071018;
+  --race-panel-2:#0a141e;
+}
+
+[data-testid="stAppViewContainer"]{
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,.013) 0 6px, transparent 6px 12px),
+    linear-gradient(rgba(80,115,140,.021) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(80,115,140,.021) 1px,transparent 1px),
+    radial-gradient(circle at 83% -10%,rgba(255,32,56,.15),transparent 26%),
+    radial-gradient(circle at 10% 105%,rgba(57,200,255,.07),transparent 25%),
+    #04080c!important;
+  background-size:auto,34px 34px,34px 34px,auto,auto,auto!important;
+}
+
+.block-container{max-width:1540px!important}
+
+/* top pit-wall masthead */
+.racing-topbar{
+  clip-path:polygon(0 0,98.9% 0,100% 24%,100% 100%,1.1% 100%,0 76%);
+  border-color:#29414f!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.34),0 0 0 1px rgba(255,32,56,.035) inset!important;
+}
+.racing-topbar:after{
+  content:"";position:absolute;right:14px;bottom:7px;width:90px;height:10px;opacity:.30;
+  background:
+    linear-gradient(45deg,#fff 25%,transparent 25%) 0 0/10px 10px,
+    linear-gradient(45deg,transparent 75%,#fff 75%) 0 0/10px 10px,
+    linear-gradient(45deg,transparent 75%,#fff 75%) 5px -5px/10px 10px,
+    linear-gradient(45deg,#fff 25%,transparent 25%) 5px 5px/10px 10px;
+}
+.brand-title{font-size:25px!important;letter-spacing:.065em!important;text-transform:uppercase;transform:skewX(-7deg)}
+.brand-title span{color:#ff2638!important;text-shadow:0 0 16px rgba(255,32,56,.23)}
+.brand-sub{font-style:italic;color:#a7b5bf!important}
+.start-lights{gap:5px!important}
+.start-lights .light{width:11px!important;height:11px!important;border-radius:3px!important;transform:skewX(-8deg)}
+.gp-name{font-style:italic;transform:skewX(-4deg);transform-origin:left center}
+.meta-chip{border-radius:4px!important;transform:skewX(-6deg);padding:5px 9px!important}
+.meta-chip>*{transform:skewX(6deg)}
+.meta-chip.accent{background:linear-gradient(180deg,rgba(255,32,56,.22),rgba(140,7,20,.15))!important}
+
+/* mode selector = steering-wheel switch feel */
+.mode-wrap{position:relative;overflow:hidden!important}
+.mode-wrap:before{content:"MODE SELECT";position:absolute;right:10px;top:6px;font-size:7px;color:#536774;letter-spacing:.16em;font-weight:900}
+[data-testid="stRadio"] label{border-radius:5px!important;transform:skewX(-4deg);padding:5px 12px!important}
+[data-testid="stRadio"] label p{transform:skewX(4deg);letter-spacing:.035em}
+[data-testid="stRadio"] label:has(input:checked){box-shadow:inset 4px 0 0 var(--race-red),0 0 18px rgba(255,32,56,.11)!important}
+
+/* setup / cards */
+.setup-shell,.compact-zone,[data-testid="stVerticalBlockBorderWrapper"]{
+  border-color:#223a48!important;
+}
+.setup-shell{position:relative;overflow:hidden}
+.setup-shell:after{content:"";position:absolute;right:-28px;top:0;width:110px;height:100%;background:repeating-linear-gradient(135deg,rgba(255,32,56,.06) 0 7px,transparent 7px 14px);pointer-events:none}
+.setup-title,.panel-title,.result-title,.compare-title,.target-card .title{font-style:italic;letter-spacing:.08em!important}
+.compact-zone-title .t{font-style:italic;font-size:11.5px!important}
+.compact-zone-title .n{border-radius:4px!important;transform:skewX(-7deg)}
+.compact-zone-title .n.red{box-shadow:0 0 16px rgba(255,32,56,.18)!important}
+.compact-zone-title .n.blue{box-shadow:0 0 16px rgba(57,200,255,.15)!important}
+.compact-zone-title .n.yellow{box-shadow:0 0 16px rgba(255,210,31,.15)!important}
+
+[data-testid="stVerticalBlockBorderWrapper"]{
+  box-shadow:0 8px 20px rgba(0,0,0,.22),inset 0 0 0 1px rgba(255,255,255,.015)!important;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:after{
+  content:"";position:absolute;right:0;top:0;width:34px;height:34px;
+  background:linear-gradient(135deg,transparent 49%,rgba(255,32,56,.18) 50%,rgba(255,32,56,.18) 53%,transparent 54%);
+  pointer-events:none;
+}
+
+/* Input controls closer to race console */
+[data-baseweb="select"]>div,[data-testid="stNumberInput"] input{
+  border-radius:5px!important;
+  background:linear-gradient(180deg,#0b151e,#071019)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+[data-baseweb="select"]>div:focus-within{border-color:#ff3042!important;box-shadow:0 0 0 1px rgba(255,48,66,.12),0 0 14px rgba(255,48,66,.08)!important}
+
+/* Racing CTA */
+.stButton>button{font-style:italic!important;clip-path:polygon(0 0,96% 0,100% 30%,100% 100%,4% 100%,0 70%);text-shadow:0 1px 0 rgba(0,0,0,.35)}
+button[kind="primary"]{background:linear-gradient(135deg,#ff4254 0%,#ed1830 45%,#9e0716 100%)!important}
+button[kind="primary"]:before{content:"";display:inline-block;width:14px;height:8px;margin-right:7px;background:repeating-linear-gradient(90deg,#fff 0 3px,transparent 3px 6px);opacity:.75}
+
+/* Result hero = timing screen */
+.result-card,.compare-card,.target-score,.target-status{
+  border-top:1px solid #3a5361!important;
+  background:linear-gradient(160deg,#09151f,#050a0f 72%)!important;
+}
+.result-card{box-shadow:inset 5px 0 0 var(--race-red),0 12px 28px rgba(0,0,0,.24)!important}
+.result-pos{font-family:Arial Narrow,Arial,sans-serif!important;letter-spacing:-.095em!important;font-style:italic!important;text-shadow:0 0 24px rgba(255,32,56,.14)}
+.result-kpi .k,.target-fact .k,.summary-card .k,.mini-kpi .k{letter-spacing:.12em!important}
+.result-kpi .v{font-style:italic}
+.compare-card{box-shadow:inset 4px 0 0 #39c8ff,0 12px 28px rgba(0,0,0,.20)!important}
+.compare-delta{position:relative}
+.compare-delta:before{content:"DELTA";display:block;font-size:6px;letter-spacing:.14em;color:#647985;margin-bottom:2px}
+
+/* Tyres = stronger motorsport cues */
+.tyre-bubble{background:radial-gradient(circle at 38% 34%,#111d27,#050b10 68%)!important;border-width:4px!important;font-style:italic}
+.tyre-arrow{color:#96a7b2!important}
+.c-soft,.tyre-bubble[style*="#ff2638"]{filter:drop-shadow(0 0 5px rgba(255,32,56,.25))}
+.c-medium,.tyre-bubble[style*="#ffd21f"]{filter:drop-shadow(0 0 5px rgba(255,210,31,.18))}
+.c-intermediate{filter:drop-shadow(0 0 5px rgba(49,223,138,.18))}
+.c-wet{filter:drop-shadow(0 0 5px rgba(45,156,255,.20))}
+
+/* tabs resemble telemetry pages */
+.stTabs [data-baseweb="tab-list"]{border-radius:5px!important;background:#060d13!important;padding:3px!important}
+.stTabs [data-baseweb="tab"]{border-radius:4px!important;font-style:italic!important}
+.stTabs [aria-selected="true"]{box-shadow:inset 4px 0 0 var(--race-red),0 0 16px rgba(255,32,56,.08)!important}
+
+/* timing tower / classification */
+.stand-head{background:linear-gradient(90deg,#101b24,#081018)!important;border-bottom:1px solid #2c4654!important}
+.stand-row{transition:background .15s ease}
+.stand-row:hover{background:#0a151e!important}
+.stand-pos{font-style:italic;font-size:14px!important}
+.stand-driver{letter-spacing:.03em}
+.stand-row.selected .stand-driver{color:#ffe777}
+
+/* target outcome */
+.target-score{box-shadow:inset 5px 0 0 var(--race-red),0 12px 28px rgba(0,0,0,.22)!important}
+.target-score .v{font-style:italic;text-shadow:0 0 18px rgba(255,32,56,.18)}
+.target-status{box-shadow:inset 5px 0 0 var(--race-yellow)!important}
+.target-scenario{clip-path:polygon(0 0,97% 0,100% 11%,100% 100%,3% 100%,0 89%)}
+.target-scenario .rank{font-style:italic;letter-spacing:.12em}
+.target-scenario .plan{font-style:italic}
+
+/* subtle dynamic effect: start lights + selected controls */
+@keyframes racePulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.22)}}
+@keyframes redSweep{0%{transform:translateX(-130%)}100%{transform:translateX(160%)}}
+.start-lights .light.on:nth-child(1){animation:racePulse 2.6s ease-in-out infinite .05s}
+.start-lights .light.on:nth-child(2){animation:racePulse 2.6s ease-in-out infinite .15s}
+.start-lights .light.on:nth-child(3){animation:racePulse 2.6s ease-in-out infinite .25s}
+.start-lights .light.on:nth-child(4){animation:racePulse 2.6s ease-in-out infinite .35s}
+.start-lights .light.on:nth-child(5){animation:racePulse 2.6s ease-in-out infinite .45s}
+button[kind="primary"]{position:relative;overflow:hidden}
+button[kind="primary"]:after{content:"";position:absolute;top:0;bottom:0;width:35%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent);animation:redSweep 3.6s ease-in-out infinite}
+
+/* Checkered micro-strip on footer */
+.footerline:before{content:"";display:inline-block;width:72px;height:8px;margin-right:10px;vertical-align:-1px;opacity:.35;background:conic-gradient(#fff 25%,transparent 0 50%,#fff 0 75%,transparent 0) 0 0/8px 8px}
+
+@media(max-width:768px){
+  .racing-topbar{clip-path:none}
+  .racing-topbar:after{display:none}
+  .brand-title{transform:none!important}
+  .gp-name{transform:none!important}
+  .meta-chip{transform:none!important}
+  .stButton>button{clip-path:none}
+}
+
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -585,7 +742,7 @@ st.markdown(
       <div class="head-meta racing-meta">
         <div class="meta-chip">Current season</div>
         <div class="meta-chip">Pre-race model</div>
-        <div class="meta-chip accent">Race-ready</div>
+        <div class="meta-chip accent">Attack mode</div>
       </div>
     </div>
     """,
@@ -1479,6 +1636,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.6.1 · Driver-specific Target Outcome.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.7 · Driver-specific Target Outcome.</div></div>',
     unsafe_allow_html=True,
 )
