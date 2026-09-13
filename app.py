@@ -109,6 +109,7 @@ def clients():
 
 f1, pirelli, openf1, meteo = clients()
 CURRENT_YEAR = datetime.now(timezone.utc).year
+SIMULATION_RUNS = 30000
 
 
 @st.cache_data(ttl=21600, show_spinner=False)
@@ -201,15 +202,15 @@ if not calendar or not drivers:
 
 def_idx=current_event_index(calendar); default_driver_idx=drivers.index("Charles Leclerc") if "Charles Leclerc" in drivers else 0
 
-# Base race + driver controls.
-base_cols=st.columns([2.15,1.8,1.15,1.0,1.05],gap="small",vertical_alignment="bottom")
-with base_cols[0]:
+# Single-row strategy inputs. Monte Carlo runs are fixed in the engine.
+input_cols=st.columns([2.15,1.75,1.05,.90,1.05,1.05],gap="small",vertical_alignment="bottom")
+with input_cols[0]:
     event_idx=st.selectbox("Grand Prix",range(len(calendar)),index=min(def_idx,len(calendar)-1),format_func=lambda i:f"R{calendar[i].get('round','—')} · {calendar[i].get('name','Grand Prix')}")
 event=calendar[event_idx]; details=official_event(event["key"],event)
-with base_cols[1]: selected_driver=st.selectbox("Driver",drivers,index=default_driver_idx)
-with base_cols[2]: start_compound=st.selectbox("Start tyre",["SOFT","MEDIUM","HARD"],index=1)
-with base_cols[3]: stops=st.selectbox("Pit stops",[1,2],index=0)
-with base_cols[4]: simulations=st.selectbox("Simulations",[5000,10000,20000,30000,50000,75000,100000],index=3,format_func=lambda x:f"{x:,}".replace(",","."))
+with input_cols[1]: selected_driver=st.selectbox("Driver",drivers,index=default_driver_idx)
+with input_cols[2]: start_compound=st.selectbox("Start tyre",["SOFT","MEDIUM","HARD"],index=1)
+with input_cols[3]: stops=st.selectbox("Pit stops",[1,2],index=0)
+simulations=SIMULATION_RUNS
 
 analysis_key=f"{CURRENT_YEAR}:{event['key']}:{selected_driver}"
 analysis_data=st.session_state.get("analysis_data") if st.session_state.get("analysis_key")==analysis_key else None
@@ -231,18 +232,25 @@ inventory=(analysis_data or {}).get("inventory") or {"SOFT":{"new":1,"used":1},"
 tyres={"SOFT":TyreModel("SOFT",-.55,soft_deg),"MEDIUM":TyreModel("MEDIUM",0.0,medium_deg),"HARD":TyreModel("HARD",.45,hard_deg)}
 provisional_inputs=SimulationInputs(CircuitProfile(race_laps,pit_loss,pit_loss*.55,overtaking,undercut,track_temp),DriverContext(selected_driver,(analysis_data or {}).get("team_name",""),grid,pace_delta),tyres,inventory,sc_prob,rain_prob,simulations,mandatory_race_compounds=("HARD","MEDIUM"))
 
-# Dynamic stint selectors filtered by regulation + available sets.
-selector_cols=st.columns([1.25,1.25,1.25,4.0],gap="small",vertical_alignment="bottom")
+# Dynamic stint selectors filtered by regulation + available sets, kept on the same input row.
 s2_options=legal_next_compounds([start_compound],stops+1,provisional_inputs) or [c for c in ("SOFT","MEDIUM","HARD") if total_sets(inventory,c)>0]
-with selector_cols[0]: stint2=st.selectbox("Stint 2",s2_options,key=f"s2:{analysis_key}:{start_compound}:{stops}")
+with input_cols[4]:
+    stint2=st.selectbox("Stint 2",s2_options,key=f"s2:{analysis_key}:{start_compound}:{stops}")
 if stops==2:
     s3_options=legal_next_compounds([start_compound,stint2],3,provisional_inputs) or [c for c in ("SOFT","MEDIUM","HARD") if total_sets(inventory,c)>0]
-    with selector_cols[1]: stint3=st.selectbox("Stint 3",s3_options,key=f"s3:{analysis_key}:{start_compound}:{stint2}")
+    with input_cols[5]:
+        stint3=st.selectbox("Stint 3",s3_options,key=f"s3:{analysis_key}:{start_compound}:{stint2}")
 else:
     stint3=None
-    with selector_cols[1]: st.markdown('<div style="height:29px"></div><div style="color:#66727d;font-size:11px;padding:9px 6px;border:1px dashed #26323d;border-radius:5px">No third stint</div>',unsafe_allow_html=True)
-with selector_cols[2]: simulate_clicked=st.button("Simulate my strategy",use_container_width=True)
-with selector_cols[3]: optimal_clicked=st.button("Find optimal strategy",use_container_width=False)
+    with input_cols[5]:
+        st.selectbox("Stint 3",["—"],index=0,disabled=True,key=f"s3-disabled:{analysis_key}:{start_compound}:{stops}")
+
+# Primary actions centered below the single input row.
+button_cols=st.columns([3.2,1.55,1.55,3.2],gap="small")
+with button_cols[1]:
+    simulate_clicked=st.button("Simulate my strategy",use_container_width=True)
+with button_cols[2]:
+    optimal_clicked=st.button("Find optimal strategy",use_container_width=True)
 
 selected_compounds=[start_compound,stint2]+([stint3] if stops==2 else [])
 valid_now,rule_reasons=validate_strategy(selected_compounds,provisional_inputs)
@@ -334,4 +342,4 @@ else:
         with st.container(border=True):
             panel_title("Data quality & confidence"); rows=[("Circuit / distance","Formula 1 official","high" if details.get("circuit_length_km") and details.get("race_distance_km") else "medium"),("Weather","Open-Meteo","high" if weather else "low"),("Tyre nomination","Pirelli official",compound_info.get("confidence","pending")),("Driver grid","OpenF1 current weekend","high" if (analysis_data or {}).get("grid_position") else "low"),("Driver degradation",f'OpenF1 {(analysis_data or {}).get("practice_name","practice")}',"high" if (analysis_data or {}).get("practice_rows",0)>=10 else "medium" if analysis_data else "low"),("Remaining tyre sets","Inference / override","low"),("Dry strategy legality","2026 FIA sporting-rule logic","high")]; st.markdown("".join(source_row(*r) for r in rows),unsafe_allow_html=True)
 
-st.caption("Strategy Engine V1.4 · Current season only · User-selected dry strategy · FIA legality filter · Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · OpenF1 driver/weekend analytics.")
+st.caption("Strategy Engine V1.4.1 · Current season only · User-selected dry strategy · FIA legality filter · Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · OpenF1 driver/weekend analytics.")

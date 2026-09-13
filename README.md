@@ -1,6 +1,6 @@
-# F1 Strategy Engine — V1.4
+# F1 Strategy Engine — V1.4.1
 
-V1.4 changes the application from a passive strategy predictor into a user-driven race strategy simulator.
+V1.4.1 changes the application from a passive strategy predictor into a user-driven race strategy simulator.
 
 ## Workflow
 
@@ -38,7 +38,7 @@ If Intermediate or Wet tyres are used during the actual race, the dry two-specif
 
 ## Important limitation
 
-Remaining tyre sets are still the weakest automatic variable in V1.4. The app keeps this value overrideable.
+Remaining tyre sets are still the weakest automatic variable in V1.4.1. The app keeps this value overrideable.
 
 ## Update the existing GitHub repository
 
@@ -54,3 +54,10 @@ Keep:
 - `.streamlit/config.toml`
 
 Streamlit Community Cloud should redeploy automatically after the commit.
+
+
+## UI change in V1.4.1
+- Monte Carlo simulations are fixed at 30,000 and no longer exposed as an input.
+- Grand Prix, Driver, Start tyre, Pit stops, Stint 2 and Stint 3 are on a single row.
+- Stint 3 is disabled when one stop is selected.
+- Simulate my strategy and Find optimal strategy remain centered below the input row.
