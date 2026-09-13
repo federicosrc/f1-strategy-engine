@@ -361,6 +361,131 @@ class FastF1DataClient:
             pass
         return None, "low"
 
+    def analyse_target_context(
+        self,
+        year: int,
+        round_number: int,
+        selected_driver: str,
+        lookback: int = 4,
+    ):
+        """Driver-specific context for Target Outcome.
+
+        Prefer current-weekend FP/Q evidence. If the selected weekend has not
+        started yet, derive a current-season-only prior from the most recent
+        completed qualifying sessions. This prevents every driver from collapsing
+        to the same generic P10 / zero-pace fallback.
+        """
+        weekend = self.analyse_weekend(year, round_number, selected_driver)
+        if weekend.get("available") and (
+            weekend.get("grid_position") is not None
+            or weekend.get("grid_model")
+            or weekend.get("pace_confidence") in {"medium", "high"}
+        ):
+            weekend["target_context"] = "current_weekend"
+            return weekend
+
+        if not self.available or int(round_number) <= 1:
+            weekend["target_context"] = "generic_fallback"
+            return weekend
+
+        sessions = []
+        start_round = max(1, int(round_number) - int(max(1, lookback)))
+        for rnd in range(int(round_number) - 1, start_round - 1, -1):
+            try:
+                q = self._load_session(year, rnd, "Q", load_laps=False)
+                if q.results is None or len(q.results) < 10:
+                    continue
+                sessions.append(q)
+            except Exception:
+                continue
+
+        if not sessions:
+            weekend["target_context"] = "generic_fallback"
+            return weekend
+
+        driver_history = {}
+        metadata = {}
+        for q in sessions:
+            for _, row in q.results.iterrows():
+                abbr = str(row.get("Abbreviation", "")).strip()
+                full = str(row.get("FullName", "")).strip()
+                if not abbr:
+                    continue
+                pos = row.get("Position")
+                try:
+                    pos = float(pos) if pd.notna(pos) else None
+                except Exception:
+                    pos = None
+                if pos is None or not np.isfinite(pos):
+                    continue
+                driver_history.setdefault(abbr, []).append(float(pos))
+                metadata[abbr] = {
+                    "driver_name": full or abbr,
+                    "team_name": str(row.get("TeamName", "")).strip(),
+                }
+
+        if not driver_history:
+            weekend["target_context"] = "generic_fallback"
+            return weekend
+
+        summaries = []
+        for abbr, positions in driver_history.items():
+            avg_pos = float(np.average(positions, weights=np.linspace(1.0, 1.35, len(positions))))
+            summaries.append((abbr, avg_pos))
+        summaries.sort(key=lambda x: x[1])
+        best_avg = summaries[0][1]
+
+        grid_model = []
+        for predicted_grid, (abbr, avg_pos) in enumerate(summaries, start=1):
+            meta = metadata.get(abbr, {})
+            pace_delta = float(np.clip((avg_pos - best_avg) * 0.060, 0.0, 1.80))
+            grid_model.append({
+                "driver_name": meta.get("driver_name", abbr),
+                "abbreviation": abbr,
+                "team_name": meta.get("team_name", ""),
+                "grid_position": predicted_grid,
+                "race_pace_delta": pace_delta,
+                "pace_confidence": "low",
+                "grid_confidence": "low",
+            })
+
+        selected_match = None
+        target_name = selected_driver.strip().lower()
+        for row in grid_model:
+            name = str(row.get("driver_name", "")).strip().lower()
+            if name == target_name or target_name in name or name in target_name:
+                selected_match = row
+                break
+
+        if selected_match is None:
+            # Try FastF1 name matching against the newest qualifying result.
+            try:
+                matched = self._match_driver(sessions[0].results, selected_driver)
+            except Exception:
+                matched = None
+            if matched:
+                abbr = matched.get("abbreviation")
+                selected_match = next((r for r in grid_model if r.get("abbreviation") == abbr), None)
+
+        if selected_match is None:
+            weekend["target_context"] = "generic_fallback"
+            return weekend
+
+        out = dict(weekend)
+        out.update({
+            "available": True,
+            "practice_name": "Current-season prior",
+            "team_name": selected_match.get("team_name", ""),
+            "grid_position": int(selected_match["grid_position"]),
+            "grid_confidence": "low",
+            "pace_delta": float(selected_match["race_pace_delta"]),
+            "pace_confidence": "low",
+            "grid_model": grid_model,
+            "grid_model_confidence": "low",
+            "target_context": "current_season_prior",
+        })
+        return out
+
     def analyse_weekend(self, year: int, round_number: int, selected_driver: str):
         fallback = {
             "available": False,

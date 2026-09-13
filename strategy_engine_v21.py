@@ -1291,15 +1291,50 @@ def _target_rival_strategy_pool(
     neutralisation_laps: np.ndarray,
     rain_events: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Build rival strategy costs without leaking the selected driver's pace into rivals.
+
+    Strategy-only costs must be generated with a neutral driver pace. Rival pace is
+    added later, driver by driver, inside `_target_build_environment`. This keeps
+    the selected driver's pace truly driver-specific in Target Outcome mode.
+    """
+    neutral_inputs = SimulationInputs(
+        circuit=inputs.circuit,
+        driver=DriverContext(
+            driver_name="Neutral target rival",
+            team_name="",
+            grid_position=10,
+            race_pace_delta=0.0,
+            team_risk=0.50,
+        ),
+        tyres=inputs.tyres,
+        tyre_sets={
+            "SOFT": {"new": 2, "used": 1},
+            "MEDIUM": {"new": 2, "used": 1},
+            "HARD": {"new": 2, "used": 1},
+            "INTERMEDIATE": {"new": 4, "used": 0},
+            "WET": {"new": 3, "used": 0},
+        },
+        sc_probability=inputs.sc_probability,
+        rain_probability=inputs.rain_probability,
+        simulations=n,
+        mandatory_race_compounds=inputs.mandatory_race_compounds,
+        rivals=None,
+        neutralisation_mode=inputs.neutralisation_mode,
+        allowed_compounds=inputs.allowed_compounds,
+        weather_mode=inputs.weather_mode,
+        weather_timeline=inputs.weather_timeline,
+        neutralisation_lap=inputs.neutralisation_lap,
+    )
+
     rows = []
-    for idx, seq in enumerate(_target_strategy_templates(inputs)):
+    for idx, seq in enumerate(_target_strategy_templates(neutral_inputs)):
         try:
-            pits, lengths, _ = optimise_pit_laps(seq, inputs)
+            pits, lengths, _ = optimise_pit_laps(seq, neutral_inputs)
         except Exception:
             continue
         rng = np.random.default_rng(seed + idx * 97)
         arr = _simulate_cost(
-            seq, lengths, inputs, rng, n,
+            seq, lengths, neutral_inputs, rng, n,
             pit_laps=pits,
             neutralisation_laps=neutralisation_laps,
             rain_events=rain_events,
@@ -1312,7 +1347,6 @@ def _target_rival_strategy_pool(
     matrix = np.vstack([r[1] for r in rows]).T
     probs = _softmax_from_costs(np.asarray([r[0] for r in rows]), temperature=5.8)
     return matrix, probs
-
 
 def _target_build_environment(inputs: SimulationInputs, n: int, seed: int) -> dict[str, Any]:
     """Simulate the rival field once and reuse it across many selected-driver plans."""
@@ -1758,7 +1792,14 @@ def find_target_outcome(
     return {
         "target": target,
         "target_position_limit": TARGET_POSITION_LIMITS[target],
+        "target_probability_definition": f"P1-P{TARGET_POSITION_LIMITS[target]}",
         "max_achievable_probability": float(best["target_probability"]),
+        "best_case_probabilities": {
+            "WIN": float(best["win_probability"]),
+            "PODIUM": float(best["podium_probability"]),
+            "TOP5": float(best["top5_probability"]),
+            "POINTS": float(best["points_probability"]),
+        },
         "status": status,
         "status_text": status_text,
         "best_case": best,

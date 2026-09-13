@@ -642,7 +642,7 @@ if app_mode=="TARGET OUTCOME":
     if target_run:
         with st.spinner(f"Searching realistic paths to {target_goal} for {target_driver}…"):
             try:
-                target_analysis=load_driver_analysis(event,target_driver)
+                target_analysis=fastf1_data.analyse_target_context(CURRENT_YEAR, int(event.get("round") or 1), target_driver)
             except Exception:
                 target_analysis={"available":False,"degradation":{},"pace_delta":0.0,"inventory":{},"grid_position":None,"grid_model":[]}
 
@@ -723,14 +723,16 @@ if app_mode=="TARGET OUTCOME":
     else:
         best=target_result["best_case"]
         robust=target_result.get("robust_path") or {}
-        goal_label={"WIN":"P1","PODIUM":"PODIUM","TOP5":"TOP 5","POINTS":"POINTS"}[target_goal]
+        goal_label={"WIN":"WIN","PODIUM":"PODIUM","TOP5":"TOP 5","POINTS":"POINTS"}[target_goal]
+        goal_range={"WIN":"P1 only","PODIUM":"P1–P3","TOP5":"P1–P5","POINTS":"P1–P10"}[target_goal]
+        prob_bundle=target_result.get("best_case_probabilities",{})
         st.markdown(
             f'''
             <div class="target-hero">
               <div class="target-score">
-                <div class="k">Maximum achievable · {goal_label}</div>
+                <div class="k">{target_driver} · chance of {goal_label}</div>
                 <div class="v">{target_result["max_achievable_probability"]:.0%}</div>
-                <div class="s">Best confirmed path across {target_result["coarse_scenarios_evaluated"]} race environments.</div>
+                <div class="s">Probability of finishing {goal_range} in the best confirmed scenario. This percentage is not the projected finishing position.</div>
               </div>
               <div class="target-status">
                 <div class="k">Assessment</div>
@@ -742,6 +744,19 @@ if app_mode=="TARGET OUTCOME":
             unsafe_allow_html=True,
         )
 
+        baseline_context=(target_analysis or {}).get("target_context","current_weekend") if "target_analysis" in locals() else "cached"
+        baseline_label={"current_weekend":"Weekend evidence","current_season_prior":"Current-season prior","generic_fallback":"Generic fallback","cached":"Saved search"}.get(baseline_context,"Driver-specific model")
+        baseline_grid = f"P{t_grid}" if "t_grid" in locals() else "—"
+        baseline_pace = f"+{t_pace:.2f}s/lap" if "t_pace" in locals() else "—"
+        st.markdown(
+            f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 8px">'
+            f'<span class="scenario-chip active">{target_driver}</span>'
+            f'<span class="scenario-chip">Baseline {baseline_grid}</span>'
+            f'<span class="scenario-chip">Pace {baseline_pace}</span>'
+            f'<span class="scenario-chip">{baseline_label}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
         target_main=st.columns([1.15,1.0],gap="small")
         with target_main[0]:
             pits_best=' / '.join('L'+str(x) for x in best["pit_laps"])
@@ -751,12 +766,14 @@ if app_mode=="TARGET OUTCOME":
                   <div class="title">Best path to target</div>
                   <div class="target-bigplan">{best["strategy"]}</div>
                   <div class="target-facts">
-                    <div class="target-fact"><div class="k">Target probability</div><div class="v">{best["target_probability"]:.0%}</div></div>
+                    <div class="target-fact"><div class="k">🥇 Win · P1</div><div class="v">{prob_bundle.get("WIN",best["win_probability"]):.0%}</div></div>
+                    <div class="target-fact"><div class="k">🏆 Podium · P1–P3</div><div class="v">{prob_bundle.get("PODIUM",best["podium_probability"]):.0%}</div></div>
+                    <div class="target-fact"><div class="k">⭐ Top 5 · P1–P5</div><div class="v">{prob_bundle.get("TOP5",best["top5_probability"]):.0%}</div></div>
+                    <div class="target-fact"><div class="k">✅ Points · P1–P10</div><div class="v">{prob_bundle.get("POINTS",best["points_probability"]):.0%}</div></div>
                     <div class="target-fact"><div class="k">Expected finish</div><div class="v">P{best["expected_finish"]:.1f}</div></div>
                     <div class="target-fact"><div class="k">Pit laps</div><div class="v">{pits_best}</div></div>
                     <div class="target-fact"><div class="k">Race control</div><div class="v">{best["neutralisation_label"]}</div></div>
                     <div class="target-fact"><div class="k">Weather</div><div class="v">{best["weather_label"]}</div></div>
-                    <div class="target-fact"><div class="k">Top 5 probability</div><div class="v">{best["top5_probability"]:.0%}</div></div>
                   </div>
                 </div>
                 ''',
@@ -1462,6 +1479,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.6 · Racing skin. Compact. Race-ready.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.6.1 · Driver-specific Target Outcome.</div></div>',
     unsafe_allow_html=True,
 )
