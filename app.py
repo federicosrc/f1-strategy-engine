@@ -34,7 +34,7 @@ st.set_page_config(
     page_title="Strategy Engine",
     page_icon="🏁",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 CSS = r"""
@@ -52,9 +52,20 @@ html, body, [data-testid="stAppViewContainer"] { background: var(--bg); color: v
     radial-gradient(circle at 80% 0%, rgba(255,30,45,.06), transparent 28%);
   background-size: 32px 32px, 32px 32px, auto;
 }
-[data-testid="stSidebar"] { background:#0b1016; border-right:1px solid var(--line); }
+section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none!important; }
+[data-testid="stHeader"] button[kind="header"] { display:none!important; }
 [data-testid="stHeader"] { background:rgba(8,11,15,.82); }
-.block-container { padding-top:1.15rem; padding-bottom:2rem; max-width:1800px; }
+.block-container { padding-top:.85rem; padding-bottom:2rem; padding-left:1rem; padding-right:1rem; max-width:1900px; }
+.setup-season { min-height:68px; display:flex; flex-direction:column; justify-content:center; padding:4px 2px; }
+.setup-season .k { color:var(--muted); font-size:9px; letter-spacing:.13em; text-transform:uppercase; }
+.setup-season .v { font-size:18px; font-weight:950; margin-top:3px; }
+.setup-help { color:var(--muted); font-size:10px; margin-top:-2px; margin-bottom:3px; }
+.circuit-stats { display:grid; grid-template-columns:1fr; gap:8px; }
+.circuit-stat { border:1px solid var(--line); background:#0b1117; border-radius:6px; padding:9px 10px; min-height:72px; }
+.circuit-stat .k { color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:.1em; }
+.circuit-stat .v { color:var(--white); font-size:25px; line-height:1.05; font-weight:950; margin-top:5px; white-space:nowrap; }
+.circuit-stat .u { color:var(--muted); font-size:10px; margin-left:4px; font-weight:700; }
+.circuit-stat .s { color:var(--muted); font-size:9px; margin-top:4px; }
 h1,h2,h3 { letter-spacing:-.02em; }
 .se-header {
   display:flex; align-items:center; justify-content:space-between; gap:18px;
@@ -203,24 +214,42 @@ if not calendar:
 
 def_idx = current_event_index(calendar)
 
-with st.sidebar:
-    st.markdown("### RACE SETUP")
-    st.caption(f"CURRENT SEASON · {CURRENT_YEAR}")
-    event_idx = st.selectbox(
-        "Grand Prix",
-        range(len(calendar)),
-        index=min(def_idx, len(calendar)-1),
-        format_func=lambda i: f"R{calendar[i].get('round','—')} · {calendar[i].get('name','Grand Prix')}",
-    )
+drivers = official_drivers()
+driver_index = drivers.index("Charles Leclerc") if "Charles Leclerc" in drivers else 0
+
+with st.container(border=True):
+    setup_cols = st.columns([0.80, 2.15, 1.70, 1.85, 1.45, 1.85], gap="small", vertical_alignment="bottom")
+    with setup_cols[0]:
+        st.markdown(
+            f'<div class="setup-season"><div class="k">Current season</div><div class="v">{CURRENT_YEAR}</div></div>',
+            unsafe_allow_html=True,
+        )
+    with setup_cols[1]:
+        event_idx = st.selectbox(
+            "Grand Prix",
+            range(len(calendar)),
+            index=min(def_idx, len(calendar)-1),
+            format_func=lambda i: f"R{calendar[i].get('round','—')} · {calendar[i].get('name','Grand Prix')}",
+        )
     event = calendar[event_idx]
-    drivers = official_drivers()
-    driver_index = drivers.index("Charles Leclerc") if "Charles Leclerc" in drivers else 0
-    selected_driver = st.selectbox("Driver", drivers, index=driver_index)
-    objective = st.selectbox("Objective", ["Best expected finish", "Podium probability", "Win probability"])
-    simulations = st.select_slider("Simulations", options=[5000, 10000, 20000, 30000, 50000, 75000, 100000], value=30000)
-    analyse = st.button("Run strategy simulation", use_container_width=True)
-    st.divider()
-    st.caption("Manual inputs are hidden unless an automatic source has low confidence.")
+    with setup_cols[2]:
+        selected_driver = st.selectbox("Driver", drivers, index=driver_index)
+    with setup_cols[3]:
+        objective = st.selectbox("Objective", ["Best expected finish", "Podium probability", "Win probability"])
+    with setup_cols[4]:
+        simulations = st.selectbox(
+            "Simulations",
+            [5000, 10000, 20000, 30000, 50000, 75000, 100000],
+            index=3,
+            format_func=lambda x: f"{x:,}".replace(",", "."),
+        )
+    with setup_cols[5]:
+        analyse = st.button("Run / refresh strategy", use_container_width=True)
+
+st.markdown(
+    '<div class="setup-help">Run once to load the current weekend. After that, changing Grand Prix or driver automatically recalculates the driver-specific model using cached session data whenever possible.</div>',
+    unsafe_allow_html=True,
+)
 
 details = official_event(event["key"], event)
 compound_info = pirelli.compounds(event["key"])
@@ -256,8 +285,21 @@ analysis_data = st.session_state.get("analysis_data")
 analysis_key = st.session_state.get("analysis_key")
 this_key = f"{CURRENT_YEAR}:{event['key']}:{selected_driver}"
 
+# The first click activates current-weekend analytics. From that point on a GP/driver
+# change automatically recalculates the selected driver. OpenF1 session payloads are
+# cached, so switching from Leclerc to Hamilton normally filters the already-downloaded
+# FP data instead of requesting the same laps/stints again.
 if analyse:
-    with st.spinner("Loading current-weekend timing and calculating degradation…"):
+    st.session_state["analysis_enabled"] = True
+
+analysis_enabled = bool(st.session_state.get("analysis_enabled", False))
+needs_analysis = analysis_enabled and (analyse or analysis_key != this_key)
+
+if analysis_key != this_key:
+    analysis_data = None
+
+if needs_analysis:
+    with st.spinner(f"Updating current-weekend model for {selected_driver}…"):
         try:
             meeting = resolve_meeting(openf1, details, CURRENT_YEAR)
             sessions = openf1.sessions(meeting["meeting_key"])
@@ -267,22 +309,28 @@ if analyse:
 
             practice = practices[0]
             session_drivers = openf1.drivers(practice["session_key"])
-            target = selected_driver.lower()
+            target = selected_driver.lower().strip()
             driver_row = None
             for d in session_drivers:
-                full = str(d.get("full_name", "")).lower()
-                if target == full or target.split()[-1] in full:
-                    driver_row = d; break
+                full = str(d.get("full_name", "")).lower().strip()
+                broadcast = str(d.get("broadcast_name", "")).lower().strip()
+                if target == full or target == broadcast or target.split()[-1] in full:
+                    driver_row = d
+                    break
             if not driver_row:
                 raise APIError("Selected driver not found in current weekend data")
             driver_number = int(driver_row["driver_number"])
 
             dataset, all_laps, raw_stints = practice_dataset(openf1, practice, driver_number)
-            # If the latest practice did not contain a usable long run, try the next most recent one.
+            # If the latest practice did not contain a usable long run, try the next one.
             if len(dataset) < 5 and len(practices) > 1:
-                practice = practices[1]
-                session_drivers = openf1.drivers(practice["session_key"])
-                dataset, all_laps, raw_stints = practice_dataset(openf1, practice, driver_number)
+                for candidate in practices[1:]:
+                    candidate_dataset, candidate_laps, candidate_stints = practice_dataset(openf1, candidate, driver_number)
+                    if len(candidate_dataset) > len(dataset):
+                        practice = candidate
+                        dataset, all_laps, raw_stints = candidate_dataset, candidate_laps, candidate_stints
+                    if len(dataset) >= 5:
+                        break
 
             degradation = estimate_degradation_from_practice(dataset)
             pace_delta = race_pace_delta(all_laps, driver_number)
@@ -305,14 +353,16 @@ if analyse:
             }
             st.session_state["analysis_data"] = analysis_data
             st.session_state["analysis_key"] = this_key
+            analysis_key = this_key
         except Exception as exc:
             st.session_state["analysis_data"] = None
             st.session_state["analysis_key"] = this_key
             analysis_data = None
-            st.warning(f"Current-weekend timing could not be fully loaded: {exc}. The dashboard remains usable with official and model fallbacks.")
-
-if analysis_key != this_key:
-    analysis_data = None
+            analysis_key = this_key
+            st.warning(
+                f"Current-weekend timing could not be fully loaded for {selected_driver}: {exc}. "
+                "The dashboard remains usable with official and model fallbacks."
+            )
 
 # Current-weekend refined values.
 grid = int((analysis_data or {}).get("grid_position") or 10)
@@ -332,16 +382,36 @@ inventory = (analysis_data or {}).get("inventory") or {
     "HARD": {"new": 1, "used": 1},
 }
 
-# Only low-confidence values are exposed as overrides.
-with st.sidebar.expander("Low-confidence overrides", expanded=False):
+# Only low-confidence values are exposed as overrides. They are now horizontal and
+# scoped by GP + driver, so tyre values entered for Hamilton cannot leak into Leclerc.
+with st.expander("Low-confidence overrides", expanded=False):
     st.caption("Change these only when you have better official information.")
-    pit_loss = st.number_input("Pit lane loss (s)", min_value=10.0, max_value=40.0, value=float(pit_loss), step=0.1)
-    sc_prob = st.slider("SC/VSC probability", 0.0, 1.0, float(sc_prob), 0.01)
-    st.markdown("**Remaining tyre sets**")
-    for c in ["SOFT", "MEDIUM", "HARD"]:
-        a, b = st.columns(2)
-        inventory[c]["new"] = a.number_input(f"{c.title()} new", 0, 5, int(inventory[c].get("new", 1)), key=f"{c}_n")
-        inventory[c]["used"] = b.number_input(f"{c.title()} used", 0, 5, int(inventory[c].get("used", 0)), key=f"{c}_u")
+    o1, o2, o3, o4, o5 = st.columns([1.15, 1.15, 1.25, 1.25, 1.25], gap="small")
+    with o1:
+        pit_loss = st.number_input(
+            "Pit lane loss (s)", min_value=10.0, max_value=40.0,
+            value=float(pit_loss), step=0.1,
+            key=f"{event['key']}_pit_loss",
+        )
+    with o2:
+        sc_prob = st.slider(
+            "SC/VSC probability", 0.0, 1.0, float(sc_prob), 0.01,
+            key=f"{event['key']}_sc_prob",
+        )
+    tyre_cols = {"SOFT": o3, "MEDIUM": o4, "HARD": o5}
+    for c, col in tyre_cols.items():
+        with col:
+            st.markdown(f"**{c.title()} sets**")
+            a, b = st.columns(2)
+            base_key = f"{CURRENT_YEAR}:{event['key']}:{selected_driver}:{c}"
+            inventory[c]["new"] = a.number_input(
+                "New", 0, 5, int(inventory[c].get("new", 1)),
+                key=f"{base_key}:new",
+            )
+            inventory[c]["used"] = b.number_input(
+                "Used", 0, 5, int(inventory[c].get("used", 0)),
+                key=f"{base_key}:used",
+            )
 
 # Header
 st.markdown(
@@ -350,7 +420,7 @@ st.markdown(
       <div class="se-headchips">
         <div class="se-chip"><div class="k">Grand Prix</div><div class="v">{details.get('name', event.get('name'))}</div></div>
         <div class="se-chip"><div class="k">Driver</div><div class="v">{selected_driver}</div></div>
-        <div class="se-chip"><div class="k">Session</div><div class="v">Pre-Race</div></div>
+        <div class="se-chip"><div class="k">Model</div><div class="v">{'Driver-specific' if analysis_data else 'Baseline'}</div></div>
         <div class="se-chip"><div class="k">Forecast</div><div class="v">{air_temp:.0f}°C · {rain_prob:.0%} rain</div></div>
       </div>
     </div>''', unsafe_allow_html=True
@@ -361,7 +431,7 @@ circuit_col, weather_col, tyre_col = st.columns([1.18, 1.0, 1.0], gap="small")
 with circuit_col:
     with st.container(border=True):
         panel_title("Circuit info")
-        map_col, info_col = st.columns([1.5, 0.75])
+        map_col, info_col = st.columns([1.52, 0.82])
         with map_col:
             if details.get("track_image_url"):
                 st.image(details["track_image_url"], use_container_width=True)
@@ -369,11 +439,23 @@ with circuit_col:
                 st.markdown("#### Track map")
                 st.caption("Official Formula 1 map will appear here when the page exposes a usable image URL.")
         with info_col:
-            st.metric("Laps", details.get("number_of_laps", "—"))
+            laps_display = details.get("number_of_laps", "—")
             length = details.get("circuit_length_km")
-            st.metric("Circuit", f"{length:.3f} km" if isinstance(length, (float, int)) else "—")
             dist = details.get("race_distance_km")
-            st.metric("Race distance", f"{dist:.1f} km" if isinstance(dist, (float, int)) else "—")
+            length_prefix = "≈" if details.get("circuit_length_derived") else ""
+            dist_prefix = "≈" if details.get("race_distance_derived") else ""
+            length_display = f"{length_prefix}{length:.3f}" if isinstance(length, (float, int)) else "—"
+            dist_display = f"{dist_prefix}{dist:.3f}" if isinstance(dist, (float, int)) else "—"
+            length_note = "derived fallback" if details.get("circuit_length_derived") else "F1 official"
+            dist_note = "derived fallback" if details.get("race_distance_derived") else "F1 official"
+            stats_html = (
+                f'<div class="circuit-stats">'
+                f'<div class="circuit-stat"><div class="k">Laps</div><div class="v">{laps_display}</div><div class="s">F1 official</div></div>'
+                f'<div class="circuit-stat"><div class="k">Circuit length</div><div class="v">{length_display}<span class="u">km</span></div><div class="s">{length_note}</div></div>'
+                f'<div class="circuit-stat"><div class="k">Race distance</div><div class="v">{dist_display}<span class="u">km</span></div><div class="s">{dist_note}</div></div>'
+                f'</div>'
+            )
+            st.markdown(stats_html, unsafe_allow_html=True)
         st.caption(f"{details.get('location', event.get('location',''))} · {circuit_type} · Source: Formula 1 official")
 
 with weather_col:
@@ -410,7 +492,7 @@ with tyre_col:
         st.markdown("**Estimated race availability**")
         inv_text = " · ".join(f"{c[0]} {inventory[c]['new']}N/{inventory[c]['used']}U" for c in ["SOFT", "MEDIUM", "HARD"])
         st.code(inv_text, language=None)
-        st.caption("Remaining sets stay overrideable because the authoritative Pirelli list is not yet machine-readable in this V1.2.")
+        st.caption("Remaining sets stay overrideable because the authoritative Pirelli list is not yet machine-readable in this V1.3.")
 
 # Build simulation.
 tyres = {
@@ -524,7 +606,7 @@ with quality_col:
     with st.container(border=True):
         panel_title("Data quality & confidence")
         rows = [
-            ("Circuit / race distance", "Formula 1 official", "high" if details.get("number_of_laps") else "medium"),
+            ("Circuit / race distance", "Formula 1 official", "high" if details.get("circuit_length_km") and details.get("race_distance_km") else "medium"),
             ("Weather forecast", "Open-Meteo", "high" if weather else "low"),
             ("Tyre nomination", "Pirelli official", compound_info.get("confidence", "pending")),
             ("Grid position", "OpenF1 current weekend", "high" if (analysis_data or {}).get("grid_position") else "low"),
@@ -536,9 +618,9 @@ with quality_col:
         if analysis_data:
             st.success("Current-weekend analysis loaded. OpenF1 calls are cached and rate-limited.")
         else:
-            st.caption("Press RUN STRATEGY SIMULATION to add current-weekend timing. Until then the dashboard uses official circuit/weather/Pirelli data plus strategic priors.")
+            st.caption("Press RUN / REFRESH STRATEGY once to load current-weekend timing. After that, changing driver or Grand Prix recalculates automatically using cached data whenever possible.")
 
 st.caption(
-    "Strategy Engine V1.2 · Current season only · Formula 1 official circuit/calendar data · "
+    "Strategy Engine V1.3 · Current season only · Formula 1 official circuit/calendar data · "
     "Pirelli official compound nominations · Open-Meteo forecast · OpenF1 current-weekend analytics."
 )

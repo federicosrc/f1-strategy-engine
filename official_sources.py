@@ -24,26 +24,27 @@ CURRENT_2026_FALLBACK = [
     {"round": 1, "key": "australia", "name": "Australia", "location": "Melbourne", "country": "Australia", "dates": "06–08 Mar"},
     {"round": 2, "key": "china", "name": "China", "location": "Shanghai", "country": "China", "dates": "13–15 Mar"},
     {"round": 3, "key": "japan", "name": "Japan", "location": "Suzuka", "country": "Japan", "dates": "27–29 Mar"},
-    {"round": 4, "key": "miami", "name": "Miami", "location": "Miami", "country": "United States", "dates": "01–03 May"},
-    {"round": 5, "key": "canada", "name": "Canada", "location": "Montreal", "country": "Canada", "dates": "22–24 May"},
-    {"round": 6, "key": "monaco", "name": "Monaco", "location": "Monte Carlo", "country": "Monaco", "dates": "05–07 Jun"},
-    {"round": 7, "key": "barcelona-catalunya", "name": "Barcelona-Catalunya", "location": "Barcelona", "country": "Spain", "dates": "12–14 Jun"},
-    {"round": 8, "key": "austria", "name": "Austria", "location": "Spielberg", "country": "Austria", "dates": "26–28 Jun"},
-    {"round": 9, "key": "great-britain", "name": "Great Britain", "location": "Silverstone", "country": "Great Britain", "dates": "03–05 Jul"},
-    {"round": 10, "key": "belgium", "name": "Belgium", "location": "Spa-Francorchamps", "country": "Belgium", "dates": "17–19 Jul"},
-    {"round": 11, "key": "hungary", "name": "Hungary", "location": "Budapest", "country": "Hungary", "dates": "24–26 Jul"},
-    {"round": 12, "key": "netherlands", "name": "Netherlands", "location": "Zandvoort", "country": "Netherlands", "dates": "21–23 Aug"},
-    {"round": 13, "key": "italy", "name": "Italy", "location": "Monza", "country": "Italy", "dates": "04–06 Sep"},
-    {"round": 14, "key": "spain", "name": "Spain", "location": "Madrid", "country": "Spain", "dates": "11–13 Sep"},
-    {"round": 15, "key": "azerbaijan", "name": "Azerbaijan", "location": "Baku", "country": "Azerbaijan", "dates": "24–26 Sep"},
-    {"round": 16, "key": "bahrain", "name": "Bahrain GP in Malaysia", "location": "Kuala Lumpur", "country": "Malaysia", "dates": "02–04 Oct"},
-    {"round": 17, "key": "singapore", "name": "Singapore", "location": "Singapore", "country": "Singapore", "dates": "09–11 Oct"},
-    {"round": 18, "key": "united-states", "name": "United States", "location": "Austin", "country": "United States", "dates": "23–25 Oct"},
-    {"round": 19, "key": "mexico", "name": "Mexico", "location": "Mexico City", "country": "Mexico", "dates": "30 Oct–01 Nov"},
-    {"round": 20, "key": "brazil", "name": "Brazil", "location": "Sao Paulo", "country": "Brazil", "dates": "06–08 Nov"},
-    {"round": 21, "key": "las-vegas", "name": "Las Vegas", "location": "Las Vegas", "country": "United States", "dates": "19–21 Nov"},
-    {"round": 22, "key": "qatar", "name": "Qatar", "location": "Lusail", "country": "Qatar", "dates": "27–29 Nov"},
-    {"round": 23, "key": "abu-dhabi", "name": "Abu Dhabi", "location": "Abu Dhabi", "country": "United Arab Emirates", "dates": "04–06 Dec"},
+    {"round": 4, "key": "bahrain", "name": "Bahrain", "location": "Sakhir", "country": "Bahrain", "dates": "10–12 Apr"},
+    {"round": 5, "key": "saudi-arabia", "name": "Saudi Arabia", "location": "Jeddah", "country": "Saudi Arabia", "dates": "17–19 Apr"},
+    {"round": 6, "key": "miami", "name": "Miami", "location": "Miami", "country": "United States", "dates": "01–03 May"},
+    {"round": 7, "key": "canada", "name": "Canada", "location": "Montreal", "country": "Canada", "dates": "22–24 May"},
+    {"round": 8, "key": "monaco", "name": "Monaco", "location": "Monte Carlo", "country": "Monaco", "dates": "05–07 Jun"},
+    {"round": 9, "key": "barcelona-catalunya", "name": "Barcelona-Catalunya", "location": "Barcelona", "country": "Spain", "dates": "12–14 Jun"},
+    {"round": 10, "key": "austria", "name": "Austria", "location": "Spielberg", "country": "Austria", "dates": "26–28 Jun"},
+    {"round": 11, "key": "great-britain", "name": "Great Britain", "location": "Silverstone", "country": "Great Britain", "dates": "03–05 Jul"},
+    {"round": 12, "key": "belgium", "name": "Belgium", "location": "Spa-Francorchamps", "country": "Belgium", "dates": "17–19 Jul"},
+    {"round": 13, "key": "hungary", "name": "Hungary", "location": "Budapest", "country": "Hungary", "dates": "24–26 Jul"},
+    {"round": 14, "key": "netherlands", "name": "Netherlands", "location": "Zandvoort", "country": "Netherlands", "dates": "21–23 Aug"},
+    {"round": 15, "key": "italy", "name": "Italy", "location": "Monza", "country": "Italy", "dates": "04–06 Sep"},
+    {"round": 16, "key": "spain", "name": "Spain", "location": "Madrid", "country": "Spain", "dates": "11–13 Sep"},
+    {"round": 17, "key": "azerbaijan", "name": "Azerbaijan", "location": "Baku", "country": "Azerbaijan", "dates": "24–26 Sep"},
+    {"round": 18, "key": "singapore", "name": "Singapore", "location": "Singapore", "country": "Singapore", "dates": "09–11 Oct"},
+    {"round": 19, "key": "united-states", "name": "United States", "location": "Austin", "country": "United States", "dates": "23–25 Oct"},
+    {"round": 20, "key": "mexico", "name": "Mexico", "location": "Mexico City", "country": "Mexico", "dates": "30 Oct–01 Nov"},
+    {"round": 21, "key": "brazil", "name": "Brazil", "location": "Sao Paulo", "country": "Brazil", "dates": "06–08 Nov"},
+    {"round": 22, "key": "las-vegas", "name": "Las Vegas", "location": "Las Vegas", "country": "United States", "dates": "19–21 Nov"},
+    {"round": 23, "key": "qatar", "name": "Qatar", "location": "Lusail", "country": "Qatar", "dates": "27–29 Nov"},
+    {"round": 24, "key": "abu-dhabi", "name": "Abu Dhabi", "location": "Yas Marina", "country": "United Arab Emirates", "dates": "04–06 Dec"},
 ]
 
 # Official Pirelli nominations already announced for the 2026 season as of 2026-09-13.
@@ -54,9 +55,9 @@ CURRENT_2026_DRIVERS = [
     "Lando Norris", "Oscar Piastri",
     "George Russell", "Kimi Antonelli",
     "Charles Leclerc", "Lewis Hamilton",
-    "Max Verstappen", "Liam Lawson",
+    "Max Verstappen", "Isack Hadjar",
     "Pierre Gasly", "Franco Colapinto",
-    "Yuki Tsunoda", "Arvid Lindblad",
+    "Liam Lawson", "Arvid Lindblad", "Yuki Tsunoda",
     "Nico Hulkenberg", "Gabriel Bortoleto",
     "Esteban Ocon", "Oliver Bearman",
     "Alex Albon", "Carlos Sainz",
@@ -100,7 +101,7 @@ def build_session() -> requests.Session:
     adapter = HTTPAdapter(max_retries=retry, pool_connections=8, pool_maxsize=8)
     session.mount("https://", adapter)
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 StrategyEngine/1.2",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 StrategyEngine/1.3",
         "Accept-Language": "en-GB,en;q=0.9,it;q=0.8",
         "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
     })
@@ -221,17 +222,49 @@ class F1OfficialClient:
         if h1:
             result["event_title"] = " ".join(h1.stripped_strings)
 
-        patterns = {
-            "circuit_length_km": r"Circuit Length\s*([0-9]+(?:\.[0-9]+)?)\s*km",
-            "number_of_laps": r"Number of Laps\s*([0-9]+)",
-            "race_distance_km": r"Race Distance\s*([0-9]+(?:\.[0-9]+)?)\s*km",
-            "first_grand_prix": r"First Grand Prix\s*([0-9]{4})",
+        # Formula1.com currently renders some circuit statistics in client-side JSON.
+        # Searching only visible BeautifulSoup strings can therefore miss Circuit Length
+        # and Race Distance even when the browser shows them.  Search both visible text
+        # and a lightly normalised version of the raw page payload.
+        raw_metrics = html.unescape(page)
+        raw_metrics = raw_metrics.replace("\\u002F", "/").replace("\\n", " ").replace("\\t", " ")
+        raw_metrics = re.sub(r"[\"'{}\[\],:]", " ", raw_metrics)
+        raw_metrics = re.sub(r"\s+", " ", raw_metrics)
+
+        def extract_metric(label: str, unit: str | None = None, integer: bool = False):
+            unit_pat = rf"\s*{re.escape(unit)}" if unit else ""
+            number = r"([0-9]+(?:[\.,][0-9]+)?)"
+            patterns = [
+                rf"{re.escape(label)}\s*{number}{unit_pat}",
+                rf"{re.escape(label)}.{{0,260}}?{number}{unit_pat}",
+            ]
+            for source in (text, raw_metrics):
+                for pat in patterns:
+                    m = re.search(pat, source, re.I | re.S)
+                    if m:
+                        val = m.group(1).replace(",", ".")
+                        return int(float(val)) if integer else float(val)
+            return None
+
+        metrics = {
+            "circuit_length_km": extract_metric("Circuit Length", "km"),
+            "number_of_laps": extract_metric("Number of Laps", integer=True),
+            "race_distance_km": extract_metric("Race Distance", "km"),
+            "first_grand_prix": extract_metric("First Grand Prix", integer=True),
         }
-        for key, pat in patterns.items():
-            m = re.search(pat, text, re.I)
-            if m:
-                val = m.group(1)
-                result[key] = int(val) if key in {"number_of_laps", "first_grand_prix"} else float(val)
+        for key, val in metrics.items():
+            if val is not None:
+                result[key] = val
+
+        # Never leave the dashboard with clipped/blank distance cards.  If one official
+        # value is temporarily absent from the rendered payload, derive a clearly-marked
+        # estimate from the other official statistics until the next refresh succeeds.
+        if result.get("race_distance_km") is None and result.get("circuit_length_km") and result.get("number_of_laps"):
+            result["race_distance_km"] = float(result["circuit_length_km"]) * int(result["number_of_laps"])
+            result["race_distance_derived"] = True
+        if result.get("circuit_length_km") is None and result.get("race_distance_km") and result.get("number_of_laps"):
+            result["circuit_length_km"] = float(result["race_distance_km"]) / int(result["number_of_laps"])
+            result["circuit_length_derived"] = True
 
         # Detailed circuit image from the official Formula 1 race page.
         img_url = None

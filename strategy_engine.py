@@ -169,11 +169,28 @@ def run_monte_carlo(inputs: SimulationInputs) -> Dict[str, Any]:
     expected_cost = cost_matrix.mean(axis=0)
 
     team_adjusted = []
+    # Team-choice prediction is driver/race-state specific, not just a copy of the
+    # mathematical optimum. A front-running car values track position more highly;
+    # a car starting further back has more incentive to use undercut/offset strategies.
+    grid = float(np.clip(inputs.driver.grid_position, 1, 22))
+    front_track_value = (23.0 - grid) / 22.0  # P1 ~1.0, P22 ~0.05
     for i, s in enumerate(strategies):
         stops = len(s["compounds"]) - 1
         conservatism = (1.0 - inputs.driver.team_risk) * stops * 2.3
-        track_position_bias = inputs.circuit.overtaking_difficulty * stops * 1.8
-        team_adjusted.append(expected_cost[i] + conservatism + track_position_bias)
+        track_position_bias = (
+            inputs.circuit.overtaking_difficulty
+            * stops
+            * (1.0 + 3.0 * front_track_value)
+        )
+        recovery_aggression = (
+            (1.0 - front_track_value)
+            * inputs.circuit.undercut_power
+            * stops
+            * 1.2
+        )
+        team_adjusted.append(
+            expected_cost[i] + conservatism + track_position_bias - recovery_aggression
+        )
     team_probs = _softmax(team_adjusted, temperature=6.5)
 
     base_finish = inputs.driver.grid_position + inputs.driver.race_pace_delta * 3.5

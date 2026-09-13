@@ -45,7 +45,7 @@ class OpenF1Client:
             raise_on_status=False,
         )
         self.session.mount("https://", HTTPAdapter(max_retries=retry, pool_connections=4, pool_maxsize=4))
-        self.session.headers.update({"User-Agent": "F1StrategyEngine/1.2"})
+        self.session.headers.update({"User-Agent": "F1StrategyEngine/1.3"})
         self._lock = threading.Lock()
         self._last_network_call = 0.0
         self._cache: dict[tuple, tuple[float, Any]] = {}
