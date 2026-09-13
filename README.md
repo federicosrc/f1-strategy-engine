@@ -1,4 +1,4 @@
-# F1 Strategy Engine — V1.5
+# F1 Strategy Engine — V1.5.1
 
 V1.5 removes OpenF1 from pre-race mode.
 
@@ -35,3 +35,11 @@ Keep:
 - official_sources.py
 - strategy_engine.py
 - .streamlit/config.toml
+
+
+## V1.5.1 UI changes
+- Fixes the accidental Streamlit source-code/debug rendering below the strategy panel.
+- Makes the final finishing position the largest visual result.
+- Replaces the ambiguous strategy-cost histogram with a direct Your plan vs Best plan benchmark.
+- Explains the meaning of strategy cost.
+- Keeps the Monte Carlo finish-position distribution and labels its purpose explicitly.

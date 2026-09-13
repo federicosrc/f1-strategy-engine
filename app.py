@@ -87,6 +87,53 @@ section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:non
 .stButton>button { border-radius:5px; border:1px solid #ff3440; background:linear-gradient(180deg,#f32635,#d60f20); color:white; font-weight:900; text-transform:uppercase; min-height:42px; }
 [data-baseweb="select"]>div,[data-testid="stNumberInput"] input{background:#0b1117!important}
 @media(max-width:1000px){.metric-grid{grid-template-columns:repeat(2,1fr)}.circuit-stats{grid-template-columns:1fr}.se-header{display:block}.se-headchips{justify-content:flex-start;margin-top:10px}}
+
+.final-outcome {
+  display:grid;
+  grid-template-columns: 1.25fr .8fr .8fr .8fr .8fr;
+  gap:10px;
+  border:1px solid #2b3944;
+  border-left:5px solid #37e77b;
+  border-radius:8px;
+  background:linear-gradient(135deg,#0c1418,#081014);
+  padding:14px;
+  margin:8px 0 10px;
+  box-shadow: inset 0 0 36px rgba(55,231,123,.035);
+}
+.final-main {
+  min-height:126px; display:flex; flex-direction:column; justify-content:center; padding-left:8px;
+}
+.final-main .k { color:#8d9aa7; font-size:9px; text-transform:uppercase; letter-spacing:.16em; font-weight:800; }
+.final-main .p { font-size:72px; line-height:.92; font-weight:1000; color:#f6f7f9; letter-spacing:-.06em; margin:8px 0 4px; }
+.final-main .s { color:#37e77b; font-size:12px; font-weight:900; }
+.outcome-mini {
+  border:1px solid #26323d; border-radius:6px; background:#0b1117;
+  min-height:126px; display:flex; flex-direction:column; justify-content:center; padding:11px 12px;
+}
+.outcome-mini .k { color:#8d9aa7; font-size:8px; text-transform:uppercase; letter-spacing:.11em; }
+.outcome-mini .v { color:#f6f7f9; font-size:25px; font-weight:950; margin-top:7px; }
+.outcome-mini .s { color:#8d9aa7; font-size:9px; margin-top:5px; }
+
+.benchmark { display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:stretch; }
+.bench-card { border:1px solid #26323d; border-radius:7px; background:#0b1117; padding:12px; }
+.bench-card.best { border-color:#237b45; box-shadow:inset 0 0 22px rgba(55,231,123,.04); }
+.bench-card .k { color:#8d9aa7; font-size:8px; text-transform:uppercase; letter-spacing:.12em; }
+.bench-card .plan { font-size:27px; font-weight:1000; margin:6px 0 3px; }
+.bench-card .cost { font-size:12px; color:#cbd3db; font-weight:800; }
+.bench-vs { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:90px; padding:6px 8px; }
+.bench-vs .delta { font-size:22px; font-weight:1000; color:#ffd21f; }
+.bench-vs .label { color:#8d9aa7; font-size:8px; text-transform:uppercase; letter-spacing:.1em; text-align:center; }
+.explain-box {
+  margin-top:9px; padding:9px 11px; border:1px solid #26323d; border-radius:6px;
+  background:#0a0f14; color:#aeb8c2; font-size:10px;
+}
+@media (max-width: 1100px) {
+  .final-outcome { grid-template-columns:1fr 1fr; }
+  .final-main { grid-column:1 / -1; }
+  .benchmark { grid-template-columns:1fr; }
+  .bench-vs { min-width:0; }
+}
+
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -281,30 +328,243 @@ with tyre_col:
     with st.container(border=True):
         panel_title("Tyre compounds"); st.markdown(f'<div class="tyre-row"><div class="tyre hard"><div class="name">HARD</div><div class="compound">{compound_info["hard"]}</div><div class="small">{inventory["HARD"]["new"]} new · {inventory["HARD"]["used"]} used</div></div><div class="tyre medium"><div class="name">MEDIUM</div><div class="compound">{compound_info["medium"]}</div><div class="small">{inventory["MEDIUM"]["new"]} new · {inventory["MEDIUM"]["used"]} used</div></div><div class="tyre soft"><div class="name">SOFT</div><div class="compound">{compound_info["soft"]}</div><div class="small">{inventory["SOFT"]["new"]} new · {inventory["SOFT"]["used"]} used</div></div></div>',unsafe_allow_html=True); st.caption(f'{compound_info["status"]} · Pirelli official')
 
+
 if result is None:
-    with st.container(border=True): panel_title("Strategy simulation"); st.info(f"Selected {' → '.join(c[0] for c in selected_compounds)} for {selected_driver}. Press SIMULATE MY STRATEGY to calculate the expected race outcome.")
+    with st.container(border=True):
+        panel_title("Strategy simulation")
+        st.info(
+            f"Selected {' → '.join(c[0] for c in selected_compounds)} for {selected_driver}. "
+            "Press SIMULATE MY STRATEGY to calculate the expected race outcome."
+        )
 else:
-    outcome_col,compare_col,scenario_col=st.columns([1.15,1.05,.88],gap="small")
-    with outcome_col:
+    optimal = result["optimal"]
+    delta = float(result["delta_to_optimal_s"])
+
+    panel_title("Final outcome")
+    final_html = f"""
+    <div class="final-outcome">
+      <div class="final-main">
+        <div class="k">Most likely finishing position</div>
+        <div class="p">P{result["most_likely_finish"]}</div>
+        <div class="s">Expected position: P{result["expected_finish"]:.1f}</div>
+      </div>
+      <div class="outcome-mini">
+        <div class="k">Points chance</div>
+        <div class="v">{result["points_probability"]:.0%}</div>
+        <div class="s">Finish P10 or better</div>
+      </div>
+      <div class="outcome-mini">
+        <div class="k">Top 5</div>
+        <div class="v">{result["top5_probability"]:.0%}</div>
+        <div class="s">Finish P5 or better</div>
+      </div>
+      <div class="outcome-mini">
+        <div class="k">Podium</div>
+        <div class="v">{result["podium_probability"]:.0%}</div>
+        <div class="s">Finish P1–P3</div>
+      </div>
+      <div class="outcome-mini">
+        <div class="k">Win</div>
+        <div class="v">{result["win_probability"]:.0%}</div>
+        <div class="s">Finish P1</div>
+      </div>
+    </div>
+    """
+    st.markdown(final_html, unsafe_allow_html=True)
+
+    strategy_col, benchmark_col, scenario_col = st.columns([1.0, 1.25, 0.9], gap="small")
+
+    with strategy_col:
         with st.container(border=True):
-            panel_title("Your strategy"); optimal=result["optimal"]; a,b=st.columns(2)
-            with a: st.markdown(f'<div class="strategy-hero"><div class="strategy-label">Selected strategy</div><div class="strategy-big">{result["strategy"]}</div><div style="font-weight:900">{result["pit_window"]}</div></div>',unsafe_allow_html=True)
-            with b: st.markdown(f'<div class="strategy-hero strategy-opt"><div class="strategy-label">Best with same start tyre</div><div class="strategy-big">{optimal["strategy"]}</div><div style="font-weight:900;color:#37e77b">{optimal["pit_window"]}</div></div>',unsafe_allow_html=True)
-            metric_html([("Expected finish",f'P{result["expected_finish"]:.1f}',f'most likely P{result["most_likely_finish"]}'),("Podium",f'{result["podium_probability"]:.0%}',"Monte Carlo"),("Win",f'{result["win_probability"]:.0%}',"Monte Carlo"),("Top 5",f'{result["top5_probability"]:.0%}',"Monte Carlo")]); delta=result["delta_to_optimal_s"]; st.success(f"Strategic delta to optimum: +{max(0,delta):.1f}s") if delta<=.35 else st.warning(f"Strategic delta to optimum: +{delta:.1f}s")
-    with compare_col:
+            panel_title("Your strategy")
+
+            strategy_html = f"""
+            <div class="strategy-hero">
+              <div class="strategy-label">Selected strategy</div>
+              <div class="strategy-big">{result["strategy"]}</div>
+              <div style="font-weight:900">Pit window: {result["pit_window"]}</div>
+            </div>
+            """
+            st.markdown(strategy_html, unsafe_allow_html=True)
+
+            metric_html([
+                (
+                    "Grid",
+                    f"P{grid}",
+                    "FastF1 / qualifying" if (analysis_data or {}).get("grid_position") else "fallback",
+                ),
+                (
+                    "Optimality",
+                    f'{result["optimal_probability"]:.0%}',
+                    "chance of being the best legal plan",
+                ),
+                (
+                    "Outside points",
+                    f'{result["downside_probability"]:.0%}',
+                    "finish P11+",
+                ),
+                (
+                    "Stops",
+                    f"{len(result['compounds']) - 1}",
+                    "planned pit stops",
+                ),
+            ])
+
+    with benchmark_col:
         with st.container(border=True):
-            panel_title("Strategy comparison"); alts=pd.DataFrame(result["alternatives"]).head(7); fig=go.Figure(go.Bar(x=alts["strategy"],y=alts["expected_cost_s"],marker_color=["#ffd21f" if s==result["strategy"] else "#37e77b" if s==optimal["strategy"] else "#66727d" for s in alts["strategy"]],text=[f"{x:.1f}s" for x in alts["expected_cost_s"]],textposition="outside")); fig.update_layout(height=310,margin=dict(l=8,r=8,t=15,b=15),paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#dce2e8"),showlegend=False,yaxis=dict(title="Expected strategy cost",gridcolor="#202a33",zeroline=False)); st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False}); st.caption("Yellow = your strategy · Green = model optimum for the selected starting compound.")
+            panel_title("Strategy benchmark")
+            delta_text = f"+{max(0.0, delta):.1f}s"
+
+            benchmark_html = f"""
+            <div class="benchmark">
+              <div class="bench-card">
+                <div class="k">Your plan</div>
+                <div class="plan">{result["strategy"]}</div>
+                <div class="cost">Estimated strategy cost: {result["expected_cost_s"]:.1f}s</div>
+                <div class="cost">Pit window: {result["pit_window"]}</div>
+              </div>
+              <div class="bench-vs">
+                <div class="delta">{delta_text}</div>
+                <div class="label">vs best plan<br>lower is better</div>
+              </div>
+              <div class="bench-card best">
+                <div class="k">Best legal plan · same start tyre</div>
+                <div class="plan">{optimal["strategy"]}</div>
+                <div class="cost">Estimated strategy cost: {optimal["expected_cost_s"]:.1f}s</div>
+                <div class="cost">Pit window: {optimal["pit_window"]}</div>
+              </div>
+            </div>
+            """
+            st.markdown(benchmark_html, unsafe_allow_html=True)
+
+            if delta <= 0.35:
+                st.success("Your selected strategy is effectively on the model optimum.")
+            else:
+                st.warning(
+                    f"The model estimates your strategy to cost about {delta:.1f}s more than "
+                    f"the best legal alternative that starts on {selected_compounds[0].title()}."
+                )
+
+            st.markdown(
+                '<div class="explain-box"><b>What “strategy cost” means:</b> '
+                'it is not total race time. It is the modelled time attributable to tyre pace, '
+                'degradation, pit-loss, traffic and undercut effects. Therefore <b>lower is better</b>.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
     with scenario_col:
         with st.container(border=True):
-            panel_title("Race outcome"); metric_html([("Grid",f"P{grid}","FastF1 / qualifying" if (analysis_data or {}).get("grid_position") else "fallback"),("Points",f'{result["points_probability"]:.0%}',"P10 or better"),("Outside points",f'{result["downside_probability"]:.0%}',"P11+"),("Optimality",f'{result["optimal_probability"]:.0%}',"vs legal alternatives")])
-            for sc in sorted(scenario_probabilities(provisional_inputs),key=lambda x:x["probability"],reverse=True):
-                p=sc["probability"]; color="#37e77b" if "stable" in sc["scenario"].lower() else "#ffd21f" if "degradation" in sc["scenario"].lower() else "#ff1e2d" if "SC" in sc["scenario"] else "#39b8ff"; st.markdown(f'<div style="display:grid;grid-template-columns:1fr 44px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #1b252e"><div><b style="font-size:10px">{sc["scenario"]}</b><div class="barline" style="margin-top:4px"><div style="width:{p*100:.0f}%;background:{color}"></div></div></div><div style="font-weight:900">{p:.0%}</div></div>',unsafe_allow_html=True)
-    dist_col,quality_col=st.columns([1.25,1.0],gap="small")
+            panel_title("Race scenarios")
+
+            for sc in sorted(
+                scenario_probabilities(provisional_inputs),
+                key=lambda x: x["probability"],
+                reverse=True,
+            ):
+                p = sc["probability"]
+
+                if "stable" in sc["scenario"].lower():
+                    color = "#37e77b"
+                elif "degradation" in sc["scenario"].lower():
+                    color = "#ffd21f"
+                elif "SC" in sc["scenario"]:
+                    color = "#ff1e2d"
+                else:
+                    color = "#39b8ff"
+
+                scenario_html = (
+                    f'<div style="display:grid;grid-template-columns:1fr 44px;gap:8px;'
+                    f'align-items:center;padding:8px 0;border-bottom:1px solid #1b252e">'
+                    f'<div><b style="font-size:10px">{sc["scenario"]}</b>'
+                    f'<div class="barline" style="margin-top:4px">'
+                    f'<div style="width:{p*100:.0f}%;background:{color}"></div>'
+                    f'</div></div><div style="font-weight:900">{p:.0%}</div></div>'
+                )
+                st.markdown(scenario_html, unsafe_allow_html=True)
+
+    dist_col, quality_col = st.columns([1.25, 1.0], gap="small")
+
     with dist_col:
         with st.container(border=True):
-            panel_title("Finish distribution"); ddf=pd.DataFrame([{"Position":f"P{k}","Probability":v*100} for k,v in result["finish_distribution"].items()]); fig2=go.Figure(go.Bar(x=ddf["Position"],y=ddf["Probability"],marker_color=["#37e77b" if int(p[1:])<=3 else "#ffd21f" if int(p[1:])<=5 else "#66727d" for p in ddf["Position"]])); fig2.update_layout(height=260,margin=dict(l=8,r=8,t=10,b=10),paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#dce2e8"),showlegend=False,yaxis=dict(title="Probability %",gridcolor="#202a33",zeroline=False)); st.plotly_chart(fig2,use_container_width=True,config={"displayModeBar":False})
+            panel_title("Finish-position distribution")
+
+            ddf = pd.DataFrame([
+                {"Position": f"P{k}", "Probability": v * 100}
+                for k, v in result["finish_distribution"].items()
+            ])
+
+            fig2 = go.Figure(
+                go.Bar(
+                    x=ddf["Position"],
+                    y=ddf["Probability"],
+                    marker_color=[
+                        "#37e77b"
+                        if int(p[1:]) <= 3
+                        else "#ffd21f"
+                        if int(p[1:]) <= 10
+                        else "#66727d"
+                        for p in ddf["Position"]
+                    ],
+                    hovertemplate="%{x}: %{y:.1f}%<extra></extra>",
+                )
+            )
+            fig2.update_layout(
+                height=260,
+                margin=dict(l=8, r=8, t=10, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#dce2e8"),
+                showlegend=False,
+                yaxis=dict(title="Probability %", gridcolor="#202a33", zeroline=False),
+                xaxis=dict(title=""),
+            )
+            st.plotly_chart(
+                fig2,
+                use_container_width=True,
+                config={"displayModeBar": False},
+            )
+            st.caption(
+                "Across all Monte Carlo simulations, this shows how often the driver "
+                "finishes in each final position."
+            )
+
     with quality_col:
         with st.container(border=True):
-            panel_title("Data quality & confidence"); rows=[("Circuit / distance","Formula 1 official","high" if details.get("circuit_length_km") and details.get("race_distance_km") else "medium"),("Weather","Open-Meteo","high" if weather else "low"),("Tyre nomination","Pirelli official",compound_info.get("confidence","pending")),("Driver grid","FastF1 qualifying",(analysis_data or {}).get("grid_confidence","low")),("Driver degradation",f'FastF1 {(analysis_data or {}).get("practice_name","practice")}',(analysis_data or {}).get("degradation_confidence","low")),("Remaining tyre sets","Inference / override","low"),("Dry strategy legality","2026 FIA sporting-rule logic","high")]; st.markdown("".join(source_row(*r) for r in rows),unsafe_allow_html=True)
+            panel_title("Data quality & confidence")
 
-st.caption("Strategy Engine V1.4.1 · Current season only · User-selected dry strategy · FIA legality filter · Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · FastF1 driver/weekend analytics.")
+            rows = [
+                (
+                    "Circuit / distance",
+                    "Formula 1 official",
+                    "high"
+                    if details.get("circuit_length_km") and details.get("race_distance_km")
+                    else "medium",
+                ),
+                ("Weather", "Open-Meteo", "high" if weather else "low"),
+                (
+                    "Tyre nomination",
+                    "Pirelli official",
+                    compound_info.get("confidence", "pending"),
+                ),
+                (
+                    "Driver grid",
+                    "FastF1 qualifying",
+                    (analysis_data or {}).get("grid_confidence", "low"),
+                ),
+                (
+                    "Driver degradation",
+                    f'FastF1 {(analysis_data or {}).get("practice_name", "practice")}',
+                    (analysis_data or {}).get("degradation_confidence", "low"),
+                ),
+                ("Remaining tyre sets", "Inference / override", "low"),
+                ("Dry strategy legality", "2026 FIA sporting-rule logic", "high"),
+            ]
+
+            st.markdown(
+                "".join(source_row(*r) for r in rows),
+                unsafe_allow_html=True,
+            )
+
+
+st.caption("Strategy Engine V1.5.1 · Current season only · User-selected dry strategy · FIA legality filter · Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · FastF1 driver/weekend analytics.")
