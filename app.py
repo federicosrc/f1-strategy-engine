@@ -9,7 +9,7 @@ import streamlit as st
 
 from official_sources import F1OfficialClient, PirelliCurrentSeason
 from data_sources import FastF1DataClient, OpenMeteoClient
-from strategy_engine import (
+from strategy_engine_v17 import (
     CircuitProfile,
     DriverContext,
     SimulationInputs,

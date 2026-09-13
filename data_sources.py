@@ -419,7 +419,7 @@ class FastF1DataClient:
         if best_session is None:
             return fallback
 
-        from strategy_engine import estimate_degradation_from_practice
+        from strategy_engine_v17 import estimate_degradation_from_practice
         merged = pd.concat(datasets, ignore_index=True) if datasets else pd.DataFrame()
         degradation = estimate_degradation_from_practice(merged)
         rows = len(merged)

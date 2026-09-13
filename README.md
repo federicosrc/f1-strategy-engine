@@ -1,4 +1,4 @@
-# F1 Strategy Engine — V1.7
+# F1 Strategy Engine — V1.7.1
 
 V1.7 adds explicit race-scenario and pit-lap controls and simplifies the dashboard.
 
@@ -55,3 +55,7 @@ Keep the existing:
 - `official_sources.py`
 - `requirements.txt`
 - `.streamlit/config.toml`
+
+
+## V1.7.1 cache-safe module fix
+The strategy engine is now imported from `strategy_engine_v17.py` so Streamlit cannot reuse an older cached `strategy_engine.py` module. Replace `app.py` and `data_sources.py`, and add `strategy_engine_v17.py`. The old `strategy_engine.py` can be left in the repository; it is no longer used by V1.7.1.
