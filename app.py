@@ -9,7 +9,7 @@ import streamlit as st
 
 from official_sources import F1OfficialClient, PirelliCurrentSeason
 from data_sources import FastF1DataClient, OpenMeteoClient
-from strategy_engine_v17 import (
+from strategy_engine_v18 import (
     CircuitProfile,
     DriverContext,
     SimulationInputs,
@@ -197,6 +197,39 @@ section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:non
   .stand-team-col { display:none; }
 }
 
+
+.setup-title {
+  margin:2px 0 8px;
+  padding:8px 12px;
+  border-left:4px solid #ff1e2d;
+  background:linear-gradient(90deg,#111820,transparent);
+  font-size:13px;
+  font-weight:950;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.setup-sub {
+  display:block;
+  margin-top:3px;
+  color:#8d9aa7;
+  font-size:9px;
+  font-weight:600;
+  letter-spacing:.02em;
+  text-transform:none;
+}
+.weather-scenario {
+  margin:7px 0 9px;
+  display:inline-block;
+  padding:4px 8px;
+  border:1px solid #26323d;
+  border-radius:4px;
+  color:#dce2e8;
+  background:#0b1117;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -274,6 +307,7 @@ def load_driver_analysis(event, selected_driver):
 
 
 
+
 calendar=official_calendar(); drivers=official_drivers()
 if not calendar or not drivers:
     st.error("Current Formula 1 calendar or driver list could not be loaded.")
@@ -282,8 +316,16 @@ if not calendar or not drivers:
 def_idx=current_event_index(calendar)
 default_driver_idx=drivers.index("Charles Leclerc") if "Charles Leclerc" in drivers else 0
 
+st.markdown(
+    '<div class="setup-title">Race scenario setup'
+    '<span class="setup-sub">Choose the race assumptions you want to test. Every selection below changes the simulation.</span>'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+# GP | Driver | Start | Stops | Stint 2 | Stint 3 | Weather | Neutralisation | Pit 1 | Pit 2
 input_cols=st.columns(
-    [2.05,1.62,.82,.67,.82,.82,1.08,.72,.72],
+    [1.72,1.38,.65,.56,.66,.66,1.05,1.00,.60,.60],
     gap="small",
     vertical_alignment="bottom",
 )
@@ -306,9 +348,24 @@ with input_cols[2]:
     start_compound=st.selectbox("Start tyre",["SOFT","MEDIUM","HARD"],index=1)
 with input_cols[3]:
     stops=st.selectbox("Stops",[1,2],index=0)
+
 with input_cols[6]:
+    weather_mode=st.selectbox(
+        "Weather",
+        ["FORECAST","DRY","HOT_DRY","COOL_DRY","CHANGEABLE","RAIN_LIKELY"],
+        format_func=lambda x:{
+            "FORECAST":"Forecast",
+            "DRY":"Dry",
+            "HOT_DRY":"Hot & dry",
+            "COOL_DRY":"Cool & dry",
+            "CHANGEABLE":"Changeable",
+            "RAIN_LIKELY":"Rain likely",
+        }[x],
+    )
+
+with input_cols[7]:
     neutralisation_mode=st.selectbox(
-        "Neutralisation",
+        "Race control",
         ["NONE","SC","VSC"],
         format_func=lambda x:{
             "NONE":"No SC / VSC",
@@ -329,15 +386,66 @@ try:
         details.get("location",event.get("location","")),
         details.get("country",event.get("country","")),
     )
-    weather=meteo.forecast_at(geo["latitude"],geo["longitude"],race_dt)
+    forecast_weather=meteo.forecast_at(geo["latitude"],geo["longitude"],race_dt)
 except Exception:
-    weather={}
+    forecast_weather={}
 
-air_temp=float(weather.get("temperature_2m",25.0))
-track_temp=float(weather.get("track_temperature_estimate",air_temp+15.0))
-rain_prob=float(weather.get("precipitation_probability",5.0) or 0)/100.0
-wind=float(weather.get("wind_speed_10m",0.0) or 0)
-humidity=float(weather.get("relative_humidity_2m",0.0) or 0)
+forecast_air=float(forecast_weather.get("temperature_2m",25.0))
+forecast_track=float(forecast_weather.get("track_temperature_estimate",forecast_air+15.0))
+forecast_rain=float(forecast_weather.get("precipitation_probability",5.0) or 0)/100.0
+forecast_wind=float(forecast_weather.get("wind_speed_10m",0.0) or 0)
+forecast_humidity=float(forecast_weather.get("relative_humidity_2m",55.0) or 55.0)
+
+# Scenario override: forecast remains the baseline, then the user can stress-test realistic conditions.
+if weather_mode=="FORECAST":
+    air_temp=forecast_air
+    track_temp=forecast_track
+    rain_prob=forecast_rain
+    wind=forecast_wind
+    humidity=forecast_humidity
+    weather_label="Forecast"
+    weather_source="Open-Meteo race-time forecast"
+elif weather_mode=="DRY":
+    air_temp=forecast_air
+    track_temp=forecast_track
+    rain_prob=0.0
+    wind=forecast_wind
+    humidity=min(forecast_humidity,55.0)
+    weather_label="Dry"
+    weather_source="User scenario · forecast temperatures"
+elif weather_mode=="HOT_DRY":
+    air_temp=max(32.0,forecast_air+4.0)
+    track_temp=max(48.0,forecast_track+8.0)
+    rain_prob=0.0
+    wind=max(2.0,forecast_wind)
+    humidity=min(45.0,forecast_humidity)
+    weather_label="Hot & dry"
+    weather_source="User stress scenario"
+elif weather_mode=="COOL_DRY":
+    air_temp=min(20.0,forecast_air-4.0)
+    track_temp=min(30.0,forecast_track-8.0)
+    rain_prob=0.0
+    wind=forecast_wind
+    humidity=max(50.0,forecast_humidity)
+    weather_label="Cool & dry"
+    weather_source="User stress scenario"
+elif weather_mode=="CHANGEABLE":
+    air_temp=min(forecast_air,24.0)
+    track_temp=min(forecast_track,34.0)
+    rain_prob=0.45
+    wind=max(forecast_wind,10.0)
+    humidity=max(forecast_humidity,70.0)
+    weather_label="Changeable"
+    weather_source="User scenario · intermittent rain risk"
+else:
+    air_temp=min(forecast_air,22.0)
+    track_temp=min(forecast_track,28.0)
+    rain_prob=0.80
+    wind=max(forecast_wind,12.0)
+    humidity=max(forecast_humidity,80.0)
+    weather_label="Rain likely"
+    weather_source="User scenario · high rain probability"
+
 circuit_type=details.get("circuit_type","Permanent")
 
 if circuit_type=="Street":
@@ -406,7 +514,7 @@ else:
 pit1_max=max(4,race_laps-6 if stops==2 else race_laps-2)
 pit1_default=max(3,min(pit1_max,int(round(race_laps*.38))))
 pit1_options=list(range(3,pit1_max+1))
-with input_cols[7]:
+with input_cols[8]:
     pit_lap_1=st.selectbox(
         "Pit lap 1",pit1_options,
         index=pit1_options.index(pit1_default) if pit1_default in pit1_options else 0,
@@ -418,7 +526,7 @@ if stops==2:
     pit2_max=max(pit2_min,race_laps-2)
     pit2_options=list(range(pit2_min,pit2_max+1))
     pit2_default=max(pit2_min,min(pit2_max,int(round(race_laps*.70))))
-    with input_cols[8]:
+    with input_cols[9]:
         pit_lap_2=st.selectbox(
             "Pit lap 2",pit2_options,
             index=pit2_options.index(pit2_default) if pit2_default in pit2_options else 0,
@@ -426,7 +534,7 @@ if stops==2:
         )
 else:
     pit_lap_2=None
-    with input_cols[8]:
+    with input_cols[9]:
         st.selectbox(
             "Pit lap 2",["—"],index=0,disabled=True,
             key=f"pit2-disabled:{analysis_key}:{stops}",
@@ -452,16 +560,11 @@ st.markdown(
     f'<span style="color:#8d9aa7;font-size:10px;font-weight:800">SELECTED</span>'
     f'{pills}'
     f'<span style="color:#8d9aa7;font-size:10px;font-weight:800">'
-    f'PIT {" / ".join("L"+str(x) for x in selected_pit_laps)} · {neutral_label}</span>'
+    f'PIT {" / ".join("L"+str(x) for x in selected_pit_laps)} · {weather_label.upper()} · {neutral_label}</span>'
     f'<span class="{"rule-ok" if valid_now else "rule-bad"}">'
     f'{"LEGAL DRY STRATEGY" if valid_now else "CHECK STRATEGY"}</span>'
     f'</div>',
     unsafe_allow_html=True,
-)
-
-st.caption(
-    "Dry-race filter: at least two different dry specifications must be used and the plan must include "
-    "a mandatory Race specification. The selected pit laps are fixed inputs."
 )
 
 if simulate_clicked or optimal_clicked:
@@ -511,9 +614,7 @@ if simulate_clicked or optimal_clicked:
             final_inputs,start_compound=start_compound,stops=(1,2)
         )
         if simulate_clicked:
-            st.error(
-                "Selected strategy is not feasible with the loaded data: "+" ".join(reasons)
-            )
+            st.error("Selected strategy is not feasible with the loaded data: "+" ".join(reasons))
             st.session_state.pop("strategy_result",None)
             legal=[]
         if optimal_clicked and legal:
@@ -527,7 +628,8 @@ if simulate_clicked or optimal_clicked:
             )
             result_key=(
                 f"{analysis_key}:{'-'.join(selected_compounds)}:"
-                f"{neutralisation_mode}:{'-'.join(str(x) for x in selected_pit_laps)}"
+                f"{weather_mode}:{neutralisation_mode}:"
+                f"{'-'.join(str(x) for x in selected_pit_laps)}"
             )
             st.session_state["strategy_result"]=result
             st.session_state["strategy_result_key"]=result_key
@@ -538,12 +640,18 @@ if simulate_clicked or optimal_clicked:
 result=st.session_state.get("strategy_result")
 result_key_now=(
     f"{analysis_key}:{'-'.join(selected_compounds)}:"
-    f"{neutralisation_mode}:{'-'.join(str(x) for x in selected_pit_laps)}"
+    f"{weather_mode}:{neutralisation_mode}:"
+    f"{'-'.join(str(x) for x in selected_pit_laps)}"
 )
 if st.session_state.get("strategy_result_key")!=result_key_now:
     result=None
 
+# Canonical projected position = the same position used in the final-classification table.
 if result is not None:
+    projected_position=int(
+        result.get("projected_finish_position")
+        or result.get("most_likely_finish")
+    )
     model_conf=result.get("race_model_confidence","low").upper()
     competitors=result.get("competitors_modelled",0)
     projection_html=f"""
@@ -551,13 +659,13 @@ if result is not None:
       <div class="projected-main">
         <div>
           <div class="label">Estimated final position</div>
-          <div class="position">P{result["most_likely_finish"]}</div>
+          <div class="position">P{projected_position}</div>
         </div>
         <div>
           <div class="label">Monte Carlo expected finish</div>
           <div class="expected">P{result["expected_finish"]:.1f}</div>
           <div style="color:#8d9aa7;font-size:9px;margin-top:4px">
-            {competitors} rivals modelled · {model_conf} confidence
+            Same ranking as final classification · {competitors} rivals · {model_conf} confidence
           </div>
         </div>
       </div>
@@ -592,20 +700,20 @@ st.markdown(
     f"""<div class="se-header">
       <div>
         <div class="se-brand"><span>STRATEGY</span> ENGINE</div>
-        <div class="se-sub">Driver + tyre strategy simulator · current season</div>
+        <div class="se-sub">Race scenario simulator · current season</div>
       </div>
       <div class="se-headchips">
         <div class="se-chip"><div class="k">Grand Prix</div><div class="v">{details.get('name',event.get('name'))}</div></div>
         <div class="se-chip"><div class="k">Driver</div><div class="v">{selected_driver}</div></div>
         <div class="se-chip"><div class="k">Strategy</div><div class="v">{' → '.join(c[0] for c in selected_compounds)}</div></div>
-        <div class="se-chip"><div class="k">Pit laps</div><div class="v">{' / '.join('L'+str(x) for x in selected_pit_laps)}</div></div>
-        <div class="se-chip"><div class="k">Neutralisation</div><div class="v">{neutral_label}</div></div>
+        <div class="se-chip"><div class="k">Weather</div><div class="v">{weather_label}</div></div>
+        <div class="se-chip"><div class="k">Race control</div><div class="v">{neutral_label}</div></div>
       </div>
     </div>""",
     unsafe_allow_html=True,
 )
 
-left_col,right_col=st.columns([1.12,1.0],gap="small")
+left_col,right_col=st.columns([1.08,1.04],gap="small")
 
 with left_col:
     with st.container(border=True):
@@ -629,10 +737,14 @@ with left_col:
 
     with st.container(border=True):
         panel_title("Weather & track")
+        st.markdown(
+            f'<div class="weather-scenario">Scenario: {weather_label}</div>',
+            unsafe_allow_html=True,
+        )
         metric_html([
-            ("Air temp",f"{air_temp:.0f}°C","Open-Meteo"),
-            ("Track temp",f"{track_temp:.0f}°C","estimated asphalt"),
-            ("Rain",f"{rain_prob:.0%}","race forecast"),
+            ("Air temp",f"{air_temp:.0f}°C",weather_source),
+            ("Track temp",f"{track_temp:.0f}°C","scenario asphalt estimate"),
+            ("Rain",f"{rain_prob:.0%}","simulation probability"),
             ("Wind",f"{wind:.0f} km/h",f"humidity {humidity:.0f}%"),
         ])
 
@@ -661,33 +773,62 @@ with right_col:
               <div class="sequence">{strategy_sequence}</div>
               <div class="strategy-details">
                 <div class="strategy-detail"><div class="k">Driver</div><div class="v">{selected_driver}</div></div>
-                <div class="strategy-detail"><div class="k">Start tyre</div><div class="v">{start_compound.title()}</div></div>
                 <div class="strategy-detail"><div class="k">Pit laps</div><div class="v">{pit_text}</div></div>
-                <div class="strategy-detail"><div class="k">Neutralisation</div><div class="v">{neutral_label}</div></div>
+                <div class="strategy-detail"><div class="k">Weather</div><div class="v">{weather_label}</div></div>
+                <div class="strategy-detail"><div class="k">Race control</div><div class="v">{neutral_label}</div></div>
               </div>
             </div>""",
             unsafe_allow_html=True,
         )
 
-        st.caption(
-            f'Pirelli nomination: Hard {compound_info["hard"]} · '
-            f'Medium {compound_info["medium"]} · Soft {compound_info["soft"]}'
-        )
-
         if result is not None:
             metric_html([
                 ("Grid",f"P{grid}","FastF1 / qualifying" if (analysis_data or {}).get("grid_position") else "fallback"),
-                ("Expected",f'P{result["expected_finish"]:.1f}',"Monte Carlo"),
+                ("Projected",f'P{result.get("projected_finish_position",result["most_likely_finish"])}',"same as final classification"),
+                ("Expected",f'P{result["expected_finish"]:.1f}',"Monte Carlo mean"),
                 ("Strategy cost",f'{result["expected_cost_s"]:.1f}s',"lower is better"),
-                ("Stops",str(stops),"fixed plan"),
             ])
+
+            # Requested placement: distribution directly below Your Strategy.
+            panel_title("Finish-position distribution")
+            ddf=pd.DataFrame([
+                {"Position":f"P{k}","Probability":v*100}
+                for k,v in result["finish_distribution"].items()
+            ])
+            fig2=go.Figure(
+                go.Bar(
+                    x=ddf["Position"],
+                    y=ddf["Probability"],
+                    marker_color=[
+                        "#37e77b" if int(p[1:])<=3
+                        else "#ffd21f" if int(p[1:])<=10
+                        else "#66727d"
+                        for p in ddf["Position"]
+                    ],
+                    hovertemplate="%{x}: %{y:.1f}%<extra></extra>",
+                )
+            )
+            fig2.update_layout(
+                height=275,
+                margin=dict(l=8,r=8,t=10,b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#dce2e8"),
+                showlegend=False,
+                yaxis=dict(title="Probability %",gridcolor="#202a33",zeroline=False),
+                xaxis=dict(title=""),
+            )
+            st.plotly_chart(
+                fig2,use_container_width=True,config={"displayModeBar":False},
+            )
 
 if result is None:
     with st.container(border=True):
         panel_title("Strategy simulation")
         st.info(
-            f"Selected {strategy_sequence} for {selected_driver}, pit {pit_text}. "
-            "Press SIMULATE MY STRATEGY to calculate the expected race outcome."
+            f"Selected {' → '.join(c[0] for c in selected_compounds)} for {selected_driver}, "
+            f"pit {' / '.join('L'+str(x) for x in selected_pit_laps)}, {weather_label}, {neutral_label}. "
+            "Press SIMULATE MY STRATEGY to calculate the race outcome."
         )
 else:
     optimal=result["optimal"]
@@ -720,123 +861,63 @@ else:
                 </div>""",
                 unsafe_allow_html=True,
             )
-            if delta<=.35:
-                st.success("Your selected strategy is effectively on the model optimum.")
-            else:
-                st.warning(
-                    f"Your fixed plan is estimated to cost about {delta:.1f}s more than "
-                    "the best legal same-start alternative."
-                )
 
     with scenario_col:
         with st.container(border=True):
-            panel_title("Race scenarios")
-            for sc in sorted(
-                scenario_probabilities(provisional_inputs),
-                key=lambda x:x["probability"],
-                reverse=True,
-            ):
-                label=sc["scenario"]
-                if neutralisation_mode=="SC":
-                    label=label.replace("SC/VSC","Safety Car")
-                elif neutralisation_mode=="VSC":
-                    label=label.replace("SC/VSC","VSC")
-
-                p=sc["probability"]
-                if "stable" in label.lower():
-                    color="#37e77b"
-                elif "degradation" in label.lower():
-                    color="#ffd21f"
-                elif "Car" in label or "VSC" in label:
-                    color="#ff1e2d"
-                else:
-                    color="#39b8ff"
-
-                st.markdown(
-                    f'<div style="display:grid;grid-template-columns:1fr 44px;gap:8px;'
-                    f'align-items:center;padding:8px 0;border-bottom:1px solid #1b252e">'
-                    f'<div><b style="font-size:10px">{label}</b>'
-                    f'<div class="barline" style="margin-top:4px">'
-                    f'<div style="width:{p*100:.0f}%;background:{color}"></div></div></div>'
-                    f'<div style="font-weight:900">{p:.0%}</div></div>',
-                    unsafe_allow_html=True,
-                )
-
-    dist_col,standings_col=st.columns([.82,1.38],gap="small")
-
-    with dist_col:
-        with st.container(border=True):
-            panel_title("Finish-position distribution")
-            ddf=pd.DataFrame([
-                {"Position":f"P{k}","Probability":v*100}
-                for k,v in result["finish_distribution"].items()
-            ])
-            fig2=go.Figure(
-                go.Bar(
-                    x=ddf["Position"],
-                    y=ddf["Probability"],
-                    marker_color=[
-                        "#37e77b" if int(p[1:])<=3
-                        else "#ffd21f" if int(p[1:])<=10
-                        else "#66727d"
-                        for p in ddf["Position"]
-                    ],
-                    hovertemplate="%{x}: %{y:.1f}%<extra></extra>",
-                )
-            )
-            fig2.update_layout(
-                height=360,
-                margin=dict(l=8,r=8,t=10,b=10),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#dce2e8"),
-                showlegend=False,
-                yaxis=dict(title="Probability %",gridcolor="#202a33",zeroline=False),
-                xaxis=dict(title=""),
-            )
-            st.plotly_chart(
-                fig2,use_container_width=True,config={"displayModeBar":False},
-            )
-
-    with standings_col:
-        with st.container(border=True):
-            panel_title("Estimated final classification")
-            standings=result.get("estimated_classification",[])
-            rows_html=[]
-
-            for row in standings:
-                selected_class=" selected" if row.get("selected_driver") else ""
-                team=row.get("team_name") or "—"
-                grid_value=f'P{row["grid_position"]}' if row.get("grid_position") else "—"
-                rows_html.append(
-                    f'<div class="stand-row{selected_class}">'
-                    f'<div class="stand-pos">P{row["projected_position"]}</div>'
-                    f'<div><div class="stand-driver">{row["driver_name"]}</div></div>'
-                    f'<div class="stand-team stand-team-col">{team}</div>'
-                    f'<div class="stand-num">{grid_value}</div>'
-                    f'<div class="stand-num">P{row["expected_finish"]:.1f}</div>'
-                    f'<div class="stand-num">{row["podium_probability"]:.0%}</div>'
-                    f'</div>'
-                )
-
+            panel_title("Scenario assumptions")
             st.markdown(
-                '<div class="standings">'
-                '<div class="stand-head">'
-                '<div>Pos</div><div>Driver</div><div class="stand-team-col">Team</div>'
-                '<div style="text-align:right">Grid</div>'
-                '<div style="text-align:right">Avg</div>'
-                '<div style="text-align:right">Podium</div>'
-                '</div>'
-                +''.join(rows_html)+
-                '</div>',
-                unsafe_allow_html=True,
+                f"""
+                **Weather:** {weather_label}  
+                **Rain probability:** {rain_prob:.0%}  
+                **Track temperature:** {track_temp:.0f}°C  
+                **Race control:** {neutral_label}  
+                **Pit laps:** {' / '.join('L'+str(x) for x in selected_pit_laps)}
+                """
             )
             st.caption(
-                "Projected order is ranked by average finishing position across the 30,000 simulated races. "
-                "The selected driver is highlighted."
+                "Weather and race-control assumptions are shared across each simulated race, "
+                "so every driver in that Monte Carlo run experiences the same scenario."
             )
 
+    # Full-width estimated final classification.
+    with st.container(border=True):
+        panel_title("Estimated final classification")
+        standings=result.get("estimated_classification",[])
+        rows_html=[]
+
+        for row in standings:
+            selected_class=" selected" if row.get("selected_driver") else ""
+            team=row.get("team_name") or "—"
+            grid_value=f'P{row["grid_position"]}' if row.get("grid_position") else "—"
+            rows_html.append(
+                f'<div class="stand-row{selected_class}">'
+                f'<div class="stand-pos">P{row["projected_position"]}</div>'
+                f'<div><div class="stand-driver">{row["driver_name"]}</div></div>'
+                f'<div class="stand-team stand-team-col">{team}</div>'
+                f'<div class="stand-num">{grid_value}</div>'
+                f'<div class="stand-num">P{row["expected_finish"]:.1f}</div>'
+                f'<div class="stand-num">{row["podium_probability"]:.0%}</div>'
+                f'</div>'
+            )
+
+        st.markdown(
+            '<div class="standings">'
+            '<div class="stand-head">'
+            '<div>Pos</div><div>Driver</div><div class="stand-team-col">Team</div>'
+            '<div style="text-align:right">Grid</div>'
+            '<div style="text-align:right">Avg</div>'
+            '<div style="text-align:right">Podium</div>'
+            '</div>'
+            +''.join(rows_html)+
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "This is the canonical projected classification. The large Estimated Final Position above "
+            "uses the selected driver's position in this same table."
+        )
+
 st.caption(
-    "Strategy Engine V1.7 · Fixed pit-lap strategy simulator · Full-grid race outcome · "
-    "Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · FastF1 weekend analytics."
+    "Strategy Engine V1.8 · Race-scenario simulator · Shared weather/race-control assumptions · "
+    "Full-grid Monte Carlo classification."
 )
