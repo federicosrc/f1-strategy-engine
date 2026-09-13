@@ -9,7 +9,7 @@ import streamlit as st
 
 from official_sources import F1OfficialClient, PirelliCurrentSeason
 from data_sources import FastF1DataClient, OpenMeteoClient
-from strategy_engine_v20 import (
+from strategy_engine_v21 import (
     CircuitProfile,
     DriverContext,
     SimulationInputs,
@@ -21,6 +21,7 @@ from strategy_engine_v20 import (
     simulate_selected_strategy,
     total_sets,
     validate_strategy,
+    find_target_outcome,
 )
 
 st.set_page_config(page_title="Strategy Engine", page_icon="🏁", layout="wide", initial_sidebar_state="collapsed")
@@ -276,6 +277,38 @@ hr{border-color:#1b2d39!important}
   .standings{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .stand-head,.stand-row{min-width:620px}
 }
+
+.mode-wrap{margin:6px 0 10px;padding:7px 10px;border:1px solid #1b3341;border-radius:7px;background:#07111a}
+.target-hero{display:grid;grid-template-columns:1.05fr 1.6fr;gap:10px;margin:8px 0 10px}
+.target-score,.target-status{border:1px solid #1f3442;border-radius:8px;background:linear-gradient(145deg,#08131c,#050b10);padding:14px 16px}
+.target-score .k,.target-status .k{font-size:9px;color:#8798a4;text-transform:uppercase;letter-spacing:.11em;font-weight:900}
+.target-score .v{font-size:52px;font-weight:1000;color:#ff3546;line-height:1;margin-top:5px}
+.target-score .s,.target-status .s{font-size:9px;color:#83939e;margin-top:5px;line-height:1.45}
+.target-status .v{font-size:22px;font-weight:1000;margin-top:7px}
+.target-card{border:1px solid #1f3442;border-radius:8px;background:#07111a;padding:13px 14px}
+.target-card .title{font-size:12px;font-weight:1000;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+.target-bigplan{font-size:29px;font-weight:1000;color:#ffd21f;margin:4px 0 10px}
+.target-facts{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.target-fact{border:1px solid #18313d;border-radius:6px;padding:8px;background:#060e15}
+.target-fact .k{font-size:8px;color:#81929e;text-transform:uppercase;letter-spacing:.08em}
+.target-fact .v{font-size:13px;font-weight:900;margin-top:4px}
+.req-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}
+.req-card{border:1px solid #1c3340;border-radius:7px;background:#07111a;padding:10px 11px}
+.req-card .k{font-size:8px;color:#8798a4;text-transform:uppercase;letter-spacing:.08em}
+.req-card .v{font-size:10px;font-weight:850;margin-top:5px;line-height:1.4}
+.target-scenarios{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.target-scenario{border:1px solid #1b3341;border-radius:7px;background:#07111a;padding:10px}
+.target-scenario .rank{font-size:8px;color:#ff5d69;font-weight:1000;text-transform:uppercase}
+.target-scenario .prob{font-size:24px;font-weight:1000;margin-top:4px}
+.target-scenario .plan{font-size:12px;font-weight:950;color:#ffd21f;margin-top:4px}
+.target-scenario .meta{font-size:8px;color:#84949f;line-height:1.45;margin-top:5px}
+@media(max-width:768px){
+  .target-hero{grid-template-columns:1fr}
+  .req-grid{grid-template-columns:1fr 1fr}
+  .target-scenarios{grid-template-columns:1fr}
+  .target-score .v{font-size:44px}
+  .target-facts{grid-template-columns:1fr 1fr}
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -397,6 +430,245 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
+# ----------------------------------------------------------------
+# APP MODE
+# ----------------------------------------------------------------
+st.markdown('<div class="mode-wrap">', unsafe_allow_html=True)
+app_mode=st.radio(
+    "Mode",
+    ["SIMULATE RACE","TARGET OUTCOME"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="app_mode",
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+if app_mode=="TARGET OUTCOME":
+    st.markdown(
+        '<div class="setup-shell"><div class="setup-head">'
+        '<div><span class="setup-title">Target outcome</span>'
+        '<span class="setup-caption">Choose the result you want to reach. The engine searches the conditions and strategy that make it most achievable.</span></div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    target_cols=st.columns([1.45,1.20,.92,.78],gap="small",vertical_alignment="bottom")
+    with target_cols[0]:
+        target_event_idx=st.selectbox(
+            "Grand Prix / Circuit",
+            range(len(calendar)),
+            index=event_idx,
+            format_func=lambda i:f'R{calendar[i].get("round","—")} · {calendar[i].get("name","Grand Prix")}',
+            key=event_state_key,
+        )
+    with target_cols[1]:
+        target_driver=st.selectbox("Driver",drivers,index=default_driver_idx,key="target_driver")
+    with target_cols[2]:
+        target_goal=st.selectbox(
+            "Target",
+            ["WIN","PODIUM","TOP5","POINTS"],
+            index=2,
+            format_func=lambda x:{"WIN":"Win · P1","PODIUM":"Podium · P1–P3","TOP5":"Top 5 · P1–P5","POINTS":"Points · P1–P10"}[x],
+            key="target_goal",
+        )
+    with target_cols[3]:
+        target_run=st.button("Find path to target",use_container_width=True,type="primary")
+
+    target_key=f'{CURRENT_YEAR}:{event["key"]}:{target_driver}:{target_goal}'
+
+    if target_run:
+        with st.spinner(f"Searching realistic paths to {target_goal} for {target_driver}…"):
+            try:
+                target_analysis=load_driver_analysis(event,target_driver)
+            except Exception:
+                target_analysis={"available":False,"degradation":{},"pace_delta":0.0,"inventory":{},"grid_position":None,"grid_model":[]}
+
+            target_race_dt=parse_race_datetime(details)
+            try:
+                target_geo=meteo.geocode(
+                    details.get("location",event.get("location","")),
+                    details.get("country",event.get("country","")),
+                )
+                target_weather=meteo.forecast_at(target_geo["latitude"],target_geo["longitude"],target_race_dt)
+            except Exception:
+                target_weather={}
+
+            t_air=float(target_weather.get("temperature_2m",25.0))
+            t_track=float(target_weather.get("track_temperature_estimate",t_air+15.0))
+            t_rain=float(target_weather.get("precipitation_probability",5.0) or 0)/100.0
+
+            circuit_type_target=details.get("circuit_type","Permanent")
+            if circuit_type_target=="Street":
+                t_overtaking,t_sc,t_pit=.82,.48,23.0
+            elif circuit_type_target=="Semi-permanent":
+                t_overtaking,t_sc,t_pit=.70,.40,23.5
+            else:
+                t_overtaking,t_sc,t_pit=.56,.31,22.0
+
+            t_grid=int((target_analysis or {}).get("grid_position") or 10)
+            t_pace=float((target_analysis or {}).get("pace_delta") or 0.0)
+            t_incident=float((target_analysis or {}).get("incident_risk") or t_sc)
+            t_sc=min(.75,max(.12,.55*t_sc+.45*t_incident))
+            t_deg=(target_analysis or {}).get("degradation",{})
+            t_soft=float(t_deg.get("SOFT",.12)); t_med=float(t_deg.get("MEDIUM",.08)); t_hard=float(t_deg.get("HARD",.055))
+            t_undercut=min(.95,.48+t_overtaking*.35+max(0,t_med-.06)*.7)
+            t_inventory=(target_analysis or {}).get("inventory") or {
+                "SOFT":{"new":2,"used":1},"MEDIUM":{"new":2,"used":1},"HARD":{"new":2,"used":1},
+            }
+            t_inventory.setdefault("INTERMEDIATE",{"new":4,"used":0})
+            t_inventory.setdefault("WET",{"new":3,"used":0})
+            t_tyres={
+                "SOFT":TyreModel("SOFT",-.55,t_soft),
+                "MEDIUM":TyreModel("MEDIUM",0.0,t_med),
+                "HARD":TyreModel("HARD",.45,t_hard),
+                "INTERMEDIATE":TyreModel("INTERMEDIATE",.05,.035),
+                "WET":TyreModel("WET",.25,.022),
+            }
+            target_inputs=SimulationInputs(
+                CircuitProfile(race_laps,t_pit,t_pit*.55,t_overtaking,t_undercut,t_track),
+                DriverContext(target_driver,(target_analysis or {}).get("team_name",""),t_grid,t_pace),
+                t_tyres,t_inventory,t_sc,t_rain,30000,
+                mandatory_race_compounds=("HARD","MEDIUM"),
+                rivals=(target_analysis or {}).get("grid_model") or None,
+                neutralisation_mode="NONE",
+                allowed_compounds=("SOFT","MEDIUM","HARD","INTERMEDIATE","WET"),
+                weather_mode="EXPECTED",
+                weather_timeline=[{
+                    "start_lap":1,"end_lap":race_laps,"mode":"EXPECTED",
+                    "track_temp":t_track,"rain_probability":t_rain,
+                }],
+                neutralisation_lap=None,
+            )
+            try:
+                target_result=find_target_outcome(target_inputs,target_goal)
+                st.session_state["target_result"]=target_result
+                st.session_state["target_result_key"]=target_key
+            except Exception as exc:
+                st.error(f"Target search could not be completed: {exc}")
+                st.session_state.pop("target_result",None)
+
+    target_result=st.session_state.get("target_result")
+    if st.session_state.get("target_result_key")!=target_key:
+        target_result=None
+
+    if target_result is None:
+        with st.container(border=True):
+            panel_title("What this mode does")
+            st.markdown(
+                "The engine keeps the driver's current-weekend pace and grid evidence fixed, then searches plausible weather evolution, Safety Car / VSC timing, tyre strategy and pit-stop timing. The strongest candidates are confirmed with 30,000 simulated races."
+            )
+    else:
+        best=target_result["best_case"]
+        robust=target_result.get("robust_path") or {}
+        goal_label={"WIN":"P1","PODIUM":"PODIUM","TOP5":"TOP 5","POINTS":"POINTS"}[target_goal]
+        st.markdown(
+            f'''
+            <div class="target-hero">
+              <div class="target-score">
+                <div class="k">Maximum achievable · {goal_label}</div>
+                <div class="v">{target_result["max_achievable_probability"]:.0%}</div>
+                <div class="s">Best confirmed path across {target_result["coarse_scenarios_evaluated"]} race environments.</div>
+              </div>
+              <div class="target-status">
+                <div class="k">Assessment</div>
+                <div class="v">{target_result["status"]}</div>
+                <div class="s">{target_result["status_text"]}</div>
+              </div>
+            </div>
+            ''',
+            unsafe_allow_html=True,
+        )
+
+        target_main=st.columns([1.15,1.0],gap="small")
+        with target_main[0]:
+            pits_best=' / '.join('L'+str(x) for x in best["pit_laps"])
+            st.markdown(
+                f'''
+                <div class="target-card">
+                  <div class="title">Best path to target</div>
+                  <div class="target-bigplan">{best["strategy"]}</div>
+                  <div class="target-facts">
+                    <div class="target-fact"><div class="k">Target probability</div><div class="v">{best["target_probability"]:.0%}</div></div>
+                    <div class="target-fact"><div class="k">Expected finish</div><div class="v">P{best["expected_finish"]:.1f}</div></div>
+                    <div class="target-fact"><div class="k">Pit laps</div><div class="v">{pits_best}</div></div>
+                    <div class="target-fact"><div class="k">Race control</div><div class="v">{best["neutralisation_label"]}</div></div>
+                    <div class="target-fact"><div class="k">Weather</div><div class="v">{best["weather_label"]}</div></div>
+                    <div class="target-fact"><div class="k">Top 5 probability</div><div class="v">{best["top5_probability"]:.0%}</div></div>
+                  </div>
+                </div>
+                ''',
+                unsafe_allow_html=True,
+            )
+        with target_main[1]:
+            if robust:
+                robust_pits=' / '.join('L'+str(x) for x in robust.get("typical_pit_laps",[])) or '—'
+                st.markdown(
+                    f'''
+                    <div class="target-card">
+                      <div class="title">Most robust path</div>
+                      <div class="target-bigplan">{robust.get("strategy","—")}</div>
+                      <div class="target-facts">
+                        <div class="target-fact"><div class="k">Average target chance</div><div class="v">{robust.get("robust_probability",0):.0%}</div></div>
+                        <div class="target-fact"><div class="k">Downside case</div><div class="v">{robust.get("downside_probability",0):.0%}</div></div>
+                        <div class="target-fact"><div class="k">Typical pit laps</div><div class="v">{robust_pits}</div></div>
+                        <div class="target-fact"><div class="k">Scenario coverage</div><div class="v">{robust.get("coverage",0):.0%}</div></div>
+                      </div>
+                    </div>
+                    ''',
+                    unsafe_allow_html=True,
+                )
+
+        reqs=target_result.get("minimum_requirements",[])
+        if reqs:
+            panel_title("Minimum requirements")
+            req_html=''.join(
+                f'<div class="req-card"><div class="k">{r["name"]}</div><div class="v">{r["value"]}</div></div>'
+                for r in reqs
+            )
+            st.markdown(f'<div class="req-grid">{req_html}</div>',unsafe_allow_html=True)
+
+        sens=target_result.get("sensitivity",[])
+        if sens:
+            sensitivity_col,scenario_col=st.columns([1.0,1.25],gap="small")
+            with sensitivity_col:
+                with st.container(border=True):
+                    panel_title("What changes the target probability")
+                    sdf=pd.DataFrame(sens).sort_values("impact_pp")
+                    sf=go.Figure(go.Bar(
+                        x=sdf["impact_pp"],y=sdf["factor"],orientation="h",
+                        marker_color=["#2ed47a" if x>=0 else "#ff4254" for x in sdf["impact_pp"]],
+                        hovertemplate="%{y}: %{x:+.1f} pp<extra></extra>",
+                    ))
+                    sf.update_layout(
+                        height=330,margin=dict(l=10,r=12,t=8,b=25),
+                        paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#dce5eb",size=9),
+                        xaxis=dict(title="Impact on target probability (pp)",gridcolor="#17303c",zeroline=True,zerolinecolor="#6b7b86"),
+                        yaxis=dict(title="",automargin=True),showlegend=False,
+                    )
+                    st.plotly_chart(sf,use_container_width=True,config={"displayModeBar":False})
+            with scenario_col:
+                with st.container(border=True):
+                    panel_title("Top scenario paths")
+                    rows=target_result.get("top_scenarios",[])[:3]
+                    html=[]
+                    for i,row in enumerate(rows,1):
+                        pits=' / '.join('L'+str(x) for x in row["pit_laps"])
+                        html.append(
+                            f'<div class="target-scenario"><div class="rank">#{i} path</div>'
+                            f'<div class="prob">{row["target_probability"]:.0%}</div>'
+                            f'<div class="plan">{row["strategy"]}</div>'
+                            f'<div class="meta">Pit {pits}<br>{row["weather_label"]}<br>{row["neutralisation_label"]}</div></div>'
+                        )
+                    st.markdown('<div class="target-scenarios">'+''.join(html)+'</div>',unsafe_allow_html=True)
+
+        st.caption(
+            f'Search: {target_result["coarse_candidates_evaluated"]} candidate plans. The leading paths were re-run with {target_result["final_simulations"]:,} Monte Carlo races. The result describes scenario-dependent probability, not a guarantee.'
+        )
+
+    st.stop()
 
 # ----------------------------------------------------------------
 # SCENARIO SETUP
@@ -1050,6 +1322,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.3 · Simulate. Analyse. Be ready.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.4 · Simulate. Analyse. Be ready.</div></div>',
     unsafe_allow_html=True,
 )
