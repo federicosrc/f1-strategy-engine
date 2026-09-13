@@ -1,18 +1,17 @@
-# Strategy Engine — V2.2
+# Strategy Engine — V2.2.1
 
-V2.2 refreshes the setup area with a more visual, less heavy interface.
+V2.2.1 improves the setup area with a lighter and more intuitive layout.
 
 ## What changed
 
-- redesigned the setup into three themed visual blocks:
+- kept the three themed setup areas:
   1. Weather Conditions
   2. Driver Strategy
   3. Safety Car / VSC
-- added visual side panels with numbered badges
-- added compact summary cards for weather and neutralisation
-- replaced the old strategy-summary dropdown with a proper tyre-plan display
+- removed the heavy right-side vertical blocks
+- moved the right-side summaries into compact horizontal summary cards under each relevant section
 - kept the simulation engine unchanged
-- hidden visible data-source references
+- preserved hidden data-source labels
 
 ## GitHub update
 

@@ -213,9 +213,20 @@ hr{border-color:#1b2d39!important}
 .info-note-box .v{font-size:12px;font-weight:850;margin-top:5px;color:#dde5eb;line-height:1.35}
 .setup-actions{display:flex;justify-content:center;align-items:center;gap:14px;margin:10px 0 2px}
 .setup-spacer{height:2px}
+.section-grid{margin:10px 0 16px}
+.section-controls{padding-top:2px}
+.inline-summary{margin-top:12px}
+.strategy-inline-grid{display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:10px;margin-top:12px}
+.strategy-plan-card,.inline-card{
+  border:1px solid #1b3341;border-radius:8px;background:#07111a;padding:11px 12px;min-height:62px;
+}
+.strategy-plan-card .k,.inline-card .k{font-size:8px;color:#8798a4;text-transform:uppercase;letter-spacing:.10em}
+.strategy-plan-card .v,.inline-card .v{font-size:12px;font-weight:850;margin-top:6px;color:#dde5eb;line-height:1.35}
+.strategy-plan-card .s,.inline-card .s{font-size:8px;color:#728492;margin-top:4px}
 @media(max-width:1200px){
   .setup-info-panel,.setup-controls-card{min-height:auto}
   .summary-col{grid-template-columns:1fr 1fr}
+  .strategy-inline-grid{grid-template-columns:1fr}
 }
 
 @media(max-width:1200px){
@@ -386,6 +397,9 @@ WEATHER_COLORS={
     "CHANGEABLE":"#684785","RAIN":"#195e9a","HEAVY_RAIN":"#0c426f",
 }
 
+TYRE_ACCENT={"SOFT":"#ff2638","MEDIUM":"#ffd21f","HARD":"#eef2f4","INTERMEDIATE":"#2ed47a","WET":"#2d9cff"}
+TYRE_SHORT={"SOFT":"S","MEDIUM":"M","HARD":"H","INTERMEDIATE":"I","WET":"W"}
+
 def weather_values(mode):
     if mode=="EXPECTED":
         return dict(air=expected_air,track=expected_track,rain=expected_rain,wind=expected_wind,humidity=expected_humidity,source="Hidden")
@@ -413,10 +427,23 @@ def note_box(label, value):
         unsafe_allow_html=True,
     )
 
+def inline_card(label, value, sub=""):
+    st.markdown(
+        f'<div class="inline-card"><div class="k">{label}</div><div class="v">{value}</div><div class="s">{sub}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+def strategy_plan_html(compounds):
+    pieces=[]
+    for i,c in enumerate(compounds):
+        pieces.append(f'<span class="tyre-bubble" style="color:{TYRE_ACCENT[c]}">{TYRE_SHORT[c]}</span>')
+        if i < len(compounds)-1:
+            pieces.append('<span class="tyre-arrow">→</span>')
+    return ''.join(pieces)
+
 # 1) WEATHER CONDITIONS
-st.markdown('<div class="setup-block"></div>', unsafe_allow_html=True)
-weather_shell=st.columns([1.05,4.85,.95], gap="small", vertical_alignment="top")
-with weather_shell[0]:
+weather_section=st.columns([1.05,5.45], gap="small", vertical_alignment="top")
+with weather_section[0]:
     st.markdown(
         '<div class="setup-info-panel blue">'
         '<div class="setup-badge blue">1</div>'
@@ -425,10 +452,10 @@ with weather_shell[0]:
         '</div>',
         unsafe_allow_html=True,
     )
-with weather_shell[1]:
+with weather_section[1]:
     with st.container(border=True):
         st.markdown('<div class="setup-card-title">Scenario builder</div>', unsafe_allow_html=True)
-        top_weather=st.columns([1.35,.82,.90,.78,.90,.78,.90], gap="small", vertical_alignment="bottom")
+        top_weather=st.columns([1.35,.82,.92,.72,.92,.72,.92], gap="small", vertical_alignment="bottom")
         with top_weather[0]:
             event_idx=st.selectbox(
                 "Grand Prix / Circuit",
@@ -494,11 +521,11 @@ rain_prob=sum((p["end_lap"]-p["start_lap"]+1)*p["rain_probability"] for p in wea
 wind=sum((p["end_lap"]-p["start_lap"]+1)*p["wind"] for p in weather_timeline)/weighted_laps
 humidity=sum((p["end_lap"]-p["start_lap"]+1)*p["humidity"] for p in weather_timeline)/weighted_laps
 
-with weather_shell[2]:
-    summary_card("Track temp", f"{track_temp:.0f}°C", "weighted estimate")
-    summary_card("Rain", f"{rain_prob:.0%}", "race average")
-    summary_card("Air temp", f"{air_temp:.0f}°C", "ambient")
-    summary_card("Wind", f"{wind:.0f} km/h", f"humidity {humidity:.0f}%")
+with weather_section[1]:
+    inner = st.columns(4, gap="small")
+    labels=[("Track temp", f"{track_temp:.0f}°C", "weighted estimate"), ("Rain", f"{rain_prob:.0%}", "race average"), ("Air temp", f"{air_temp:.0f}°C", "ambient"), ("Wind", f"{wind:.0f} km/h", f"humidity {humidity:.0f}%")]
+    for col, item in zip(inner, labels):
+        with col: summary_card(*item)
 
 wet_tyres_enabled=any(
     p["mode"] in {"CHANGEABLE","RAIN","HEAVY_RAIN"} or (p["mode"]=="EXPECTED" and p["rain_probability"]>=.20)
@@ -510,17 +537,8 @@ default_start="WET" if phase1_mode=="HEAVY_RAIN" else "INTERMEDIATE" if phase1_m
 if default_start not in available_compounds: default_start="MEDIUM"
 
 # 2) DRIVER STRATEGY
-strategy_preview = lambda items: ''.join([
-    f'<span class="tyre-bubble" style="color:{ {"SOFT":"#ff2638","MEDIUM":"#ffd21f","HARD":"#eef2f4","INTERMEDIATE":"#2ed47a","WET":"#2d9cff"}[c] }">{ {"SOFT":"S","MEDIUM":"M","HARD":"H","INTERMEDIATE":"I","WET":"W"}[c] }</span>' + ('' if i==len(items)-1 else '<span class="tyre-arrow">→</span>')
-    for i,c in enumerate(items)
-])
-
-simulations=SIMULATION_RUNS
-analysis_key=f"{CURRENT_YEAR}:{event['key']}:{selected_driver if 'selected_driver' in locals() else drivers[default_driver_idx]}"
-
-st.markdown('<div class="setup-block"></div>', unsafe_allow_html=True)
-strategy_shell=st.columns([1.05,3.95,1.80], gap="small", vertical_alignment="top")
-with strategy_shell[0]:
+strategy_section=st.columns([1.05,5.45], gap="small", vertical_alignment="top")
+with strategy_section[0]:
     st.markdown(
         '<div class="setup-info-panel red">'
         '<div class="setup-badge red">2</div>'
@@ -529,7 +547,9 @@ with strategy_shell[0]:
         '</div>',
         unsafe_allow_html=True,
     )
-with strategy_shell[1]:
+
+simulations=SIMULATION_RUNS
+with strategy_section[1]:
     with st.container(border=True):
         st.markdown('<div class="setup-card-title">Strategy inputs</div>', unsafe_allow_html=True)
         strategy_row=st.columns([1.15,.78,.78,.72,.72,.72,.72], gap="small", vertical_alignment="bottom")
@@ -609,17 +629,22 @@ else:
     with strategy_row[6]: st.selectbox("Pit lap 2", ["—"], disabled=True)
 
 selected_compounds_preview=[start_compound,stint2]+([stint3] if stops==2 else [])
-with strategy_shell[2]:
-    with st.container(border=True):
-        st.markdown('<div class="setup-card-title">Your strategy</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="tyre-plan-display">{strategy_preview(selected_compounds_preview)}</div>', unsafe_allow_html=True)
-        note_box("Stint windows", f'L1–L{pit_lap_1} · ' + (f'L{pit_lap_1+1}–L{pit_lap_2} · L{pit_lap_2+1}–L{race_laps}' if stops==2 else f'L{pit_lap_1+1}–L{race_laps}'))
-        note_box("Plan type", f'{stops} stop' + ('s' if stops==2 else '') + ' · start on ' + start_compound.title())
+with strategy_section[1]:
+    row = st.columns([1.65,1.1,1.1], gap="small")
+    with row[0]:
+        st.markdown(
+            f'<div class="strategy-plan-card"><div class="k">Your strategy</div><div class="v" style="margin-top:10px">{strategy_plan_html(selected_compounds_preview)}</div><div class="s">Tyre sequence selected for the race</div></div>',
+            unsafe_allow_html=True,
+        )
+    with row[1]:
+        stint_text = f'L1–L{pit_lap_1} · ' + (f'L{pit_lap_1+1}–L{pit_lap_2} · L{pit_lap_2+1}–L{race_laps}' if stops==2 else f'L{pit_lap_1+1}–L{race_laps}')
+        inline_card("Stint windows", stint_text, "planned tyre usage")
+    with row[2]:
+        inline_card("Plan type", f'{stops} stop' + ('s' if stops==2 else '') + ' · start on ' + start_compound.title(), "current setup")
 
 # 3) SAFETY CAR / VSC
-st.markdown('<div class="setup-block"></div>', unsafe_allow_html=True)
-safety_shell=st.columns([1.05,4.10,1.65], gap="small", vertical_alignment="top")
-with safety_shell[0]:
+safety_section=st.columns([1.05,5.45], gap="small", vertical_alignment="top")
+with safety_section[0]:
     st.markdown(
         '<div class="setup-info-panel yellow">'
         '<div class="setup-badge yellow">3</div>'
@@ -628,7 +653,7 @@ with safety_shell[0]:
         '</div>',
         unsafe_allow_html=True,
     )
-with safety_shell[1]:
+with safety_section[1]:
     with st.container(border=True):
         st.markdown('<div class="setup-card-title">Race control inputs</div>', unsafe_allow_html=True)
         safety_row=st.columns([1.10,.88,2.35], gap="small", vertical_alignment="bottom")
@@ -656,10 +681,15 @@ with safety_shell[1]:
         )
         with safety_row[2]:
             note_box("Race control note", note_text)
-with safety_shell[2]:
-    summary_card("Neutralisation", {"NONE":"None","SC":"Safety Car","VSC":"VSC"}[neutralisation_mode], "event type")
-    summary_card("Timing", "Random" if neutralisation_mode!="NONE" and neutralisation_lap is None else (f"L{neutralisation_lap}" if neutralisation_lap is not None else "—"), "trigger lap")
-    summary_card("Pit-loss effect", "Reduced" if neutralisation_mode!="NONE" else "Normal", "during neutralisation")
+with safety_section[1]:
+    row = st.columns(3, gap="small")
+    items = [
+        ("Neutralisation", {"NONE":"None","SC":"Safety Car","VSC":"VSC"}[neutralisation_mode], "event type"),
+        ("Timing", "Random" if neutralisation_mode!="NONE" and neutralisation_lap is None else (f"L{neutralisation_lap}" if neutralisation_lap is not None else "—"), "trigger lap"),
+        ("Pit-loss effect", "Reduced" if neutralisation_mode!="NONE" else "Normal", "during neutralisation"),
+    ]
+    for col, item in zip(row, items):
+        with col: summary_card(*item)
 selected_compounds=[start_compound,stint2]+([stint3] if stops==2 else [])
 selected_pit_laps=[pit_lap_1]+([pit_lap_2] if stops==2 else [])
 short_name={"SOFT":"S","MEDIUM":"M","HARD":"H","INTERMEDIATE":"I","WET":"W"}
@@ -978,6 +1008,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.2 · Simulate. Analyse. Be ready.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.2.1 · Simulate. Analyse. Be ready.</div></div>',
     unsafe_allow_html=True,
 )
