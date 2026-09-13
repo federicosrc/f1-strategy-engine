@@ -227,12 +227,54 @@ hr{border-color:#1b2d39!important}
   .setup-info-panel,.setup-controls-card{min-height:auto}
   .summary-col{grid-template-columns:1fr 1fr}
   .strategy-inline-grid{grid-template-columns:1fr}
+  .topbar{grid-template-columns:1fr}
+  .gp-head{border-left:none;padding-left:0;margin-top:7px}
+  .head-meta{text-align:left;margin-top:6px}
+  .result-shell{grid-template-columns:1fr}
+  .result-flex{grid-template-columns:145px repeat(3,1fr)}
+  .result-kpi:nth-child(n+5){display:none}
+  .stand-head,.stand-row{grid-template-columns:38px minmax(120px,1.4fr) 48px 70px 58px 58px}
+  .stand-team-col{display:none}
 }
 
-@media(max-width:1200px){
-  .topbar{grid-template-columns:1fr}.gp-head{border-left:none;padding-left:0;margin-top:7px}.head-meta{text-align:left;margin-top:6px}
-  .result-shell{grid-template-columns:1fr}.result-flex{grid-template-columns:145px repeat(3,1fr)}.result-kpi:nth-child(n+5){display:none}
-  .stand-head,.stand-row{grid-template-columns:38px minmax(120px,1.4fr) 48px 70px 58px 58px}.stand-team-col{display:none}
+@media(max-width:768px){
+  .block-container{padding:.35rem .45rem 4rem;max-width:100%}
+  [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important;gap:.45rem!important}
+  [data-testid="column"]{width:100%!important;flex:1 1 100%!important;min-width:100%!important}
+  [data-testid="stVerticalBlockBorderWrapper"]{border-radius:8px!important}
+  [data-baseweb="select"]>div,[data-testid="stNumberInput"] input{min-height:46px!important}
+  [data-testid="stSelectbox"] label,[data-testid="stNumberInput"] label{font-size:10px!important}
+  .stButton>button{min-height:44px;font-size:11px;width:100%}
+  .topbar{min-height:auto;padding:4px 0 10px;gap:6px}
+  .brand-title{font-size:20px}
+  .brand-sub{font-size:8px;line-height:1.4}
+  .gp-name{font-size:15px}
+  .gp-place,.head-meta{font-size:9px}
+  .setup-shell{padding:8px 10px 4px}
+  .setup-head{flex-direction:column;align-items:flex-start;gap:8px}
+  .setup-title{font-size:13px}
+  .setup-caption{display:block;margin:4px 0 0 0}
+  .scenario-chip{margin:0 6px 6px 0}
+  .setup-info-panel{padding:12px 12px 12px 14px}
+  .setup-badge{width:38px;height:38px;font-size:18px;margin-bottom:10px}
+  .setup-info-title{font-size:13px}
+  .setup-info-sub{max-width:none;font-size:9px}
+  .setup-card-title{margin-bottom:8px}
+  .summary-card .v{font-size:16px}
+  .result-flex{grid-template-columns:1fr!important;gap:0;margin-top:6px}
+  .result-pos{font-size:58px;line-height:.9;margin-bottom:6px}
+  .result-kpi{border-left:none;border-top:1px solid #263946;padding:8px 0 8px 0;min-height:auto}
+  .compare-grid{grid-template-columns:1fr;gap:10px;margin-top:12px}
+  .compare-delta{border:none;border-top:1px solid #263946;border-bottom:1px solid #263946;padding:10px 0}
+  .compare-side .big{font-size:22px}
+  .panel-title,.result-title,.compare-title{font-size:12px}
+  .metric-grid{grid-template-columns:1fr 1fr}
+  .circuit-layout{grid-template-columns:1fr}
+  .tyre-bubble{width:40px;height:40px;font-size:19px}
+  .tyre-arrow{font-size:18px}
+  .strategy-plan-card .v,.inline-card .v,.info-note-box .v{font-size:11px}
+  .standings{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .stand-head,.stand-row{min-width:620px}
 }
 </style>
 """
@@ -931,8 +973,8 @@ with lower[1]:
             cls="c-"+name.lower()
             tr+=f'<tr><td><span class="tyre-dot {cls}">{abbr}</span>{name.title()}</td><td>{dg:.3f}</td><td>{pace}</td><td>{use}</td></tr>'
         st.markdown(
-            '<table class="tyre-table"><thead><tr><th>Compound</th><th>Deg s/lap</th><th>Relative pace</th><th>Best use</th></tr></thead>'
-            f'<tbody>{tr}</tbody></table>',
+            '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tyre-table"><thead><tr><th>Compound</th><th>Deg s/lap</th><th>Relative pace</th><th>Best use</th></tr></thead>'
+            f'<tbody>{tr}</tbody></table></div>',
             unsafe_allow_html=True,
         )
 
@@ -987,11 +1029,11 @@ with st.container(border=True):
                 f'</div>'
             )
         st.markdown(
-            '<div class="standings">'
+            '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><div class="standings">'
             '<div class="stand-head"><div>Pos</div><div>Driver</div><div class="stand-team-col">Team</div>'
             '<div style="text-align:right">Grid</div><div style="text-align:right">Expected</div>'
             '<div style="text-align:right">Podium</div><div style="text-align:right">Points</div></div>'
-            +''.join(rows_html)+'</div>',
+            +''.join(rows_html)+'</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -1008,6 +1050,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.2.1 · Simulate. Analyse. Be ready.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.3 · Simulate. Analyse. Be ready.</div></div>',
     unsafe_allow_html=True,
 )

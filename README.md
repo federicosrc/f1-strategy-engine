@@ -1,17 +1,16 @@
-# Strategy Engine — V2.2.1
+# Strategy Engine — V2.3
 
-V2.2.1 improves the setup area with a lighter and more intuitive layout.
+V2.3 makes the app much more usable on smartphone.
 
 ## What changed
 
-- kept the three themed setup areas:
-  1. Weather Conditions
-  2. Driver Strategy
-  3. Safety Car / VSC
-- removed the heavy right-side vertical blocks
-- moved the right-side summaries into compact horizontal summary cards under each relevant section
-- kept the simulation engine unchanged
-- preserved hidden data-source labels
+- responsive mobile layout
+- all Streamlit column groups stack vertically on small screens
+- larger touch-friendly inputs and buttons
+- setup header and scenario chips wrap correctly on mobile
+- result cards, comparison cards and KPI blocks collapse into a readable vertical flow
+- tyre table and final classification are horizontally scrollable on phone
+- no change to the simulation engine
 
 ## GitHub update
 
