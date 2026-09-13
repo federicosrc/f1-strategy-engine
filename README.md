@@ -1,89 +1,54 @@
-# F1 Strategy Engine — V2.0
+# Strategy Engine — V2.1
 
-V2.0 turns the project into a race-scenario simulator rather than a static pre-race calculator.
+V2.1 is a visual redesign of the V2.0 race-scenario simulator. The simulation engine is unchanged.
 
-## New: race scenario timeline
+## Visual direction
 
-The dashboard now visualises the complete scenario on one horizontal race timeline:
+The interface is rebuilt as a compact dark pit-wall workstation:
 
-- tyre stints
-- pit-stop laps
-- weather phases
-- exact Safety Car / VSC timing when selected
+- original `STRATEGY ENGINE` text header — no Formula 1 logo
+- Grand Prix / round information in the top bar
+- compact Race Scenario Setup
+- large Estimated Race Result card
+- Strategy Comparison card
+- full-width race timeline
+- circuit information panel
+- Weather & Track Evolution chart
+- Tyre Performance table
+- Key Insights panel
+- full Estimated Final Classification timing screen
 
-Soft, Medium, Hard, Intermediate and Wet use distinct tyre colours.
+## Tyre colours
 
-## New: multi-phase weather
+- Soft: red
+- Medium: yellow
+- Hard: white
+- Intermediate: green
+- Wet: blue
 
-Choose:
+## Functionality retained
 
-- Static
-- 2 phases
-- 3 phases
-
-Each phase can be:
-
-- Expected conditions
-- Dry
-- Hot & dry
-- Cool & dry
-- Changeable
-- Rain
-- Heavy rain
-
-For multi-phase weather you choose the lap at which the next phase starts.
-
-Example:
-
-- L1–L21 Dry
-- L22–L39 Rain
-- L40–L57 Heavy rain
-
-The strategy engine evaluates each stint against the weather actually present during those laps.
-
-## New: Safety Car / VSC timing
-
-Choose:
-
-- No SC / VSC
-- Safety Car
-- Virtual Safety Car
-
-For SC/VSC choose either:
-
-- Random timing
-- a specific race lap
-
-A pit stop only receives the neutralisation pit-loss benefit when it occurs close to the event.
-
-## Engine changes
-
-Pit timing optimisation is now weather-timeline aware.
-
-For example, if rain starts on lap 23, an Intermediate switch around that transition can become preferable to a dry-only pit window.
-
-The full-grid Monte Carlo model uses the same race scenario for every driver in each simulation.
-
-## Interface
-
-The interface has been reworked toward a pit-wall dashboard:
-
-1. Race & Strategy
-2. Scenario Evolution
-3. Outcome
-4. Race Scenario Timeline
-5. Circuit / Weather Evolution / Your Strategy
-6. Strategy Benchmark
-7. Estimated Final Classification
+V2.1 keeps the V2.0 engine unchanged:
+- 30,000 Monte Carlo simulations
+- full-grid race outcome
+- static / 2-phase / 3-phase weather
+- Intermediate / Wet logic
+- exact or random Safety Car / VSC timing
+- fixed pit laps
+- strategy benchmarking
+- FastF1 current-weekend inputs
 
 ## GitHub update
 
-Replace:
+Replace only:
 - `app.py`
-- `data_sources.py`
 - `README.md`
 
-Add:
+Keep:
 - `strategy_engine_v20.py`
+- `data_sources.py`
+- `official_sources.py`
+- `requirements.txt`
+- `.streamlit/config.toml`
 
-Older engine versions may remain in the repository. V2.0 imports only `strategy_engine_v20.py`.
+No F1 logo or F1 brand mark is included in the app.
