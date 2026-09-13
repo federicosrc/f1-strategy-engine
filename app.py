@@ -1242,7 +1242,7 @@ with detail_tabs[1]:
         for i,comp in enumerate(selected_compounds):
             s=bounds[i]; e=bounds[i+1]-1
             tf.add_trace(go.Bar(
-                y=["Your strategy"],x=[e-s+1],base=[s-1],orientation="h",marker_color=TYRE_COLORS.get(comp,"#8896a0"),
+                y=["Your strategy"],x=[e-s+1],base=[s-1],orientation="h",marker_color=TYRE_ACCENT.get(comp,"#8896a0"),
                 text=[short_name.get(comp,comp[0])],textposition="inside",
                 hovertemplate=f'{comp.title()} · L{s}–L{e}<extra></extra>',showlegend=False,
             ))
@@ -1363,6 +1363,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.5 · Compact. Clear. Race-ready.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.5.1 · Compact. Clear. Race-ready.</div></div>',
     unsafe_allow_html=True,
 )
