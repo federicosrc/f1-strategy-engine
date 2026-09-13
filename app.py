@@ -371,6 +371,101 @@ hr{border-color:#1b2d39!important}
   .compact-kpis{grid-template-columns:1fr 1fr}
 }
 
+
+
+/* V2.6 racing visual layer */
+:root{--glow-red:rgba(255,38,56,.28);--glow-blue:rgba(45,156,255,.22);--glow-yellow:rgba(255,210,31,.18)}
+[data-testid="stAppViewContainer"]{
+  background:
+    linear-gradient(rgba(80,115,140,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(80,115,140,.022) 1px,transparent 1px),
+    linear-gradient(135deg,rgba(255,255,255,.018) 25%,transparent 25%) 0 0/18px 18px,
+    linear-gradient(315deg,rgba(255,255,255,.012) 25%,transparent 25%) 0 0/18px 18px,
+    radial-gradient(circle at 84% -12%,rgba(255,38,56,.12),transparent 30%),
+    radial-gradient(circle at 12% 115%,rgba(45,156,255,.07),transparent 26%),
+    #05090d;
+}
+.topbar.racing-topbar{
+  border:1px solid #203543;border-radius:12px;padding:10px 14px 11px;margin-bottom:6px;
+  background:
+    linear-gradient(90deg,rgba(255,38,56,.08),transparent 18%,transparent 82%,rgba(45,156,255,.08)),
+    linear-gradient(145deg,rgba(7,14,21,.98),rgba(5,10,15,.96));
+  box-shadow:0 8px 30px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.02);
+  position:relative;overflow:hidden;
+}
+.topbar.racing-topbar:before{
+  content:"";position:absolute;left:0;right:0;top:0;height:4px;
+  background:linear-gradient(90deg,var(--red) 0 26%, transparent 26% 30%, #ffffff 30% 56%, transparent 56% 60%, var(--cyan) 60% 100%);
+  opacity:.9;
+}
+.brand-block{display:flex;flex-direction:column;gap:3px}
+.brand-title{font-size:24px!important;font-style:italic;letter-spacing:.04em;text-shadow:0 0 18px rgba(255,38,56,.12)}
+.brand-title span{position:relative}
+.brand-title span:after{content:"";position:absolute;left:0;right:-14px;bottom:-3px;height:2px;background:linear-gradient(90deg,var(--red),transparent)}
+.brand-sub{letter-spacing:.16em;color:#9eacb7!important}
+.start-lights{display:flex;gap:7px;margin-top:4px}
+.start-lights .light{width:12px;height:12px;border-radius:50%;background:#1a232c;border:1px solid #3b4c59;box-shadow:inset 0 0 0 1px rgba(255,255,255,.02)}
+.start-lights .light.on{background:radial-gradient(circle at 35% 35%,#ff8892 0 15%,#ff3143 40%,#9d0d1a 82%);box-shadow:0 0 10px rgba(255,38,56,.55),0 0 18px rgba(255,38,56,.28)}
+.gp-head{border-left:1px solid rgba(255,255,255,.08)!important;padding-left:16px!important}
+.round-box{display:inline-flex;align-items:center;gap:6px;background:#08131d;border:1px solid #27404f;border-radius:999px;padding:4px 10px;color:#e9eff3!important}
+.round-box:before{content:"⬢";color:var(--red);font-size:9px}
+.gp-name{font-size:18px!important;letter-spacing:.04em;text-shadow:0 0 12px rgba(255,255,255,.03)}
+.racing-meta{display:flex;justify-content:flex-end;gap:7px;align-items:center;flex-wrap:wrap;text-align:right!important}
+.meta-chip{padding:6px 10px;border:1px solid #263c4a;border-radius:999px;background:#08131d;color:#b8c3cb;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.11em}
+.meta-chip.accent{color:#ffd7db;border-color:#a12935;background:rgba(255,38,56,.09);box-shadow:0 0 0 1px rgba(255,38,56,.18) inset}
+.mode-wrap{border-radius:12px!important;background:linear-gradient(145deg,rgba(8,18,27,.98),rgba(5,11,17,.96))!important;box-shadow:0 8px 26px rgba(0,0,0,.20)}
+[data-testid="stRadio"] label{border-radius:999px!important;background:linear-gradient(180deg,#0a141d,#07111a)!important;box-shadow:inset 0 -1px 0 rgba(255,255,255,.02)}
+[data-testid="stRadio"] label:has(input:checked){background:linear-gradient(180deg,rgba(255,38,56,.18),rgba(255,38,56,.07))!important;border-color:#ff3042!important;box-shadow:0 0 0 1px rgba(255,38,56,.20) inset, 0 0 18px rgba(255,38,56,.10)}
+.stButton>button{
+  border-radius:8px!important;
+  border:1px solid #314b5b!important;
+  background:linear-gradient(180deg,#0c1822,#08121a)!important;
+  box-shadow:0 7px 18px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.04);
+  letter-spacing:.08em!important;
+}
+.stButton>button:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(0,0,0,.28), 0 0 0 1px rgba(255,38,56,.15) inset}
+button[kind="primary"]{
+  background:linear-gradient(180deg,#ff4253 0%, #ef1d31 45%, #b80b1a 100%)!important;
+  border-color:#ff5c6a!important;color:#fff!important;
+  box-shadow:0 10px 22px rgba(184,11,26,.35), inset 0 1px 0 rgba(255,255,255,.15)!important;
+}
+button[kind="primary"]:hover{box-shadow:0 12px 26px rgba(184,11,26,.42),0 0 20px rgba(255,38,56,.22)!important}
+[data-testid="stVerticalBlockBorderWrapper"],.result-card,.compare-card,.summary-card,.strategy-plan-card,.inline-card,.info-note-box,.target-card,.target-score,.target-status,.req-card,.target-scenario,.standings{
+  position:relative;overflow:hidden;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:before,.result-card:before,.compare-card:before,.summary-card:before,.strategy-plan-card:before,.inline-card:before,.info-note-box:before,.target-card:before,.target-score:before,.target-status:before,.req-card:before,.target-scenario:before,.standings:before{
+  content:"";position:absolute;left:0;top:0;width:100%;height:2px;background:linear-gradient(90deg,var(--red),transparent 55%,var(--cyan));opacity:.85;
+}
+.panel-title:before{width:4px!important;border-radius:2px;box-shadow:0 0 12px rgba(255,38,56,.32)}
+.summary-card .v,.mini-kpi .v,.metric-card .v,.target-fact .v{font-style:italic}
+.setup-shell,.compact-zone,.result-card,.compare-card,.target-score,.target-status,.target-card{box-shadow:0 10px 22px rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.02)}
+.scenario-chip{border-radius:999px!important;padding:6px 10px!important;background:#09131b!important}
+.scenario-chip.active{box-shadow:0 0 0 1px rgba(255,38,56,.2) inset,0 0 14px rgba(255,38,56,.08)}
+.compact-zone-title .n{box-shadow:0 0 14px rgba(0,0,0,.20)}
+.compact-zone-title .n.blue{background:linear-gradient(180deg,#3eb4ff,#1659cf)!important}
+.compact-zone-title .n.red{background:linear-gradient(180deg,#ff5c69,#c40a1b)!important}
+.compact-zone-title .n.yellow{background:linear-gradient(180deg,#ffe875,#ffbf08)!important}
+.summary-card,.mini-kpi,.metric-card,.strategy-plan-card,.inline-card,.info-note-box{background:linear-gradient(180deg,#07111a,#061019)!important}
+.tyre-bubble{box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 0 18px rgba(255,255,255,.03)}
+.tyre-bubble[style*="#ff2638"]{box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 0 18px rgba(255,38,56,.15)}
+.tyre-bubble[style*="#ffd21f"]{box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 0 18px rgba(255,210,31,.12)}
+.tyre-bubble[style*="#2d9cff"],.tyre-bubble[style*="#2ed47a"]{box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 0 18px rgba(45,156,255,.13)}
+.stTabs [data-baseweb="tab-list"]{padding:2px;background:rgba(8,17,25,.8);border:1px solid #203543;border-radius:999px}
+.stTabs [data-baseweb="tab"]{height:36px!important;background:transparent!important;border-radius:999px!important;border:1px solid transparent!important;font-weight:900!important;letter-spacing:.05em!important}
+.stTabs [aria-selected="true"]{background:linear-gradient(180deg,rgba(255,38,56,.18),rgba(255,38,56,.08))!important;border-color:#ff3042!important;box-shadow:0 0 18px rgba(255,38,56,.10)}
+.result-pos{background:linear-gradient(180deg,#fff7f8,#ff6d7a 28%,#ff2638 68%,#bf0e20)!important;-webkit-background-clip:text!important}
+.compare-delta .v{color:#50e79b!important;text-shadow:0 0 10px rgba(46,212,122,.20)}
+.insight{padding:10px 0!important}
+.insight-icon{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#09131b;border:1px solid #213846}
+.stand-row.selected{background:linear-gradient(90deg,rgba(255,210,31,.11),rgba(255,210,31,.03))!important;box-shadow:inset 0 0 0 1px #ffd21f, inset 5px 0 0 #ffd21f!important}
+.footerline{font-size:8px;color:#7d8d98!important;text-transform:uppercase;letter-spacing:.11em}
+@media(max-width:768px){
+  .racing-meta{justify-content:flex-start}
+  .gp-name{font-size:16px!important}
+  .brand-title{font-size:21px!important}
+  .start-lights .light{width:10px;height:10px}
+}
+
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -472,10 +567,13 @@ race_laps=int(details.get("number_of_laps") or 57)
 # Header - intentionally no F1 logo and no visible data-source labels.
 st.markdown(
     f"""
-    <div class="topbar">
-      <div>
+    <div class="topbar racing-topbar">
+      <div class="brand-block">
         <div class="brand-title"><span>STRATEGY</span> ENGINE</div>
         <div class="brand-sub">Race simulator · pit-wall decision support</div>
+        <div class="start-lights" aria-hidden="true">
+          <span class="light on"></span><span class="light on"></span><span class="light on"></span><span class="light on"></span><span class="light on"></span>
+        </div>
       </div>
       <div class="gp-head">
         <div class="round-box">Round {event.get("round","—")}</div>
@@ -484,9 +582,10 @@ st.markdown(
           <div class="gp-place">{details.get("location",event.get("location",""))} · {event.get("dates","")}</div>
         </div>
       </div>
-      <div class="head-meta">
-        <b>Current-season simulator</b><br>
-        Pre-race strategic dashboard
+      <div class="head-meta racing-meta">
+        <div class="meta-chip">Current season</div>
+        <div class="meta-chip">Pre-race model</div>
+        <div class="meta-chip accent">Race-ready</div>
       </div>
     </div>
     """,
@@ -536,7 +635,7 @@ if app_mode=="TARGET OUTCOME":
         )
         target_goal={"🥇 Win":"WIN","🏆 Podium":"PODIUM","⭐ Top 5":"TOP5","✅ Points":"POINTS"}[target_goal_ui]
     with target_cols[3]:
-        target_run=st.button("Find path",use_container_width=True,type="primary")
+        target_run=st.button("🎯 Find path",use_container_width=True,type="primary")
 
     target_key=f'{CURRENT_YEAR}:{event["key"]}:{target_driver}:{target_goal}'
 
@@ -1050,9 +1149,9 @@ valid_now,rule_reasons=validate_strategy(selected_compounds,provisional_inputs)
 # Main actions.
 act=st.columns([3.2,1.65,1.65,3.2],gap="small")
 with act[1]:
-    simulate_clicked=st.button("Simulate",use_container_width=True,type="primary")
+    simulate_clicked=st.button("▶ Simulate race",use_container_width=True,type="primary")
 with act[2]:
-    optimal_clicked=st.button("Optimal",use_container_width=True)
+    optimal_clicked=st.button("⚡ Find optimum",use_container_width=True)
 
 if simulate_clicked or optimal_clicked:
     with st.spinner(f"Building current-weekend model for {selected_driver}…"):
@@ -1363,6 +1462,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.5.1 · Compact. Clear. Race-ready.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.6 · Racing skin. Compact. Race-ready.</div></div>',
     unsafe_allow_html=True,
 )

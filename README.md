@@ -1,14 +1,21 @@
-# Strategy Engine — V2.5.1
+# Strategy Engine — V2.6
 
-Hotfix for V2.5.
+V2.6 adds a more racing-oriented visual identity while keeping the compact layout introduced in V2.5.
 
-## Fixed
-- corrected the race-timeline colour mapping that caused a `NameError`
-- timeline now uses the active `TYRE_ACCENT` mapping for Soft / Medium / Hard / Intermediate / Wet
-- no change to the simulation engine or model calculations
+## What changed
+
+- stronger racing-style header
+- start-light visual motif in the title area
+- more aggressive red / blue / yellow accents
+- upgraded buttons with a more premium pit-wall look
+- panels and cards now have racing highlight strips
+- tabs and selectors styled more like control switches
+- improved overall contrast and visual hierarchy
+- no change to simulation logic
 
 ## GitHub update
-Replace only:
+
+Replace:
 - `app.py`
 - `README.md`
 
