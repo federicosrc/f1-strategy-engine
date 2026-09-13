@@ -49,6 +49,7 @@ class SimulationInputs:
     objective: str = "Best expected finish"
     mandatory_race_compounds: tuple[str, ...] = ("HARD", "MEDIUM")
     rivals: list[dict[str, Any]] | None = None
+    neutralisation_mode: str = "NONE"  # NONE | SC | VSC
 
 
 def _robust_slope(x, y):
@@ -245,17 +246,98 @@ def _pit_window(pit_laps: list[int], race_laps: int, width: int = 2) -> str:
     )
 
 
+
+def _stint_lengths_from_pit_laps(
+    pit_laps: list[int],
+    race_laps: int,
+    expected_stops: int,
+) -> list[int]:
+    pits = [int(x) for x in pit_laps]
+    if len(pits) != expected_stops:
+        raise ValueError(f"Expected {expected_stops} pit-stop lap(s).")
+    if any(p <= 1 or p >= race_laps for p in pits):
+        raise ValueError("Pit laps must be inside the race distance.")
+    if pits != sorted(pits) or len(set(pits)) != len(pits):
+        raise ValueError("Pit laps must be strictly increasing.")
+    if any((b - a) < 3 for a, b in zip(pits, pits[1:])):
+        raise ValueError("Pit stops must be separated by at least 3 laps.")
+
+    boundaries = [0] + pits + [race_laps]
+    lengths = [boundaries[i + 1] - boundaries[i] for i in range(len(boundaries) - 1)]
+    if any(l < 2 for l in lengths):
+        raise ValueError("Each stint must last at least 2 laps.")
+    return lengths
+
+
+def _fixed_plan_cost(
+    compounds: list[str],
+    pit_laps: list[int],
+    inputs: SimulationInputs,
+) -> tuple[list[int], float]:
+    lengths = _stint_lengths_from_pit_laps(
+        pit_laps,
+        inputs.circuit.race_laps,
+        len(compounds) - 1,
+    )
+    tyre_cost = sum(
+        _deterministic_stint_cost(comp, laps, inputs)
+        for comp, laps in zip(compounds, lengths)
+    )
+    stops = len(compounds) - 1
+    traffic = inputs.circuit.overtaking_difficulty * (3.0 if stops == 1 else 6.2)
+    leverage = _timing_leverage(pit_laps, inputs)
+    total = tyre_cost + stops * inputs.circuit.pit_loss_green + traffic - leverage
+    return lengths, float(total)
+
+
+def _sample_neutralisation_laps(
+    inputs: SimulationInputs,
+    rng: np.random.Generator,
+    n: int,
+) -> np.ndarray:
+    mode = str(inputs.neutralisation_mode or "NONE").upper()
+    if mode not in {"SC", "VSC"}:
+        return np.full(n, -999, dtype=int)
+
+    race_laps = max(8, int(inputs.circuit.race_laps))
+    # Avoid the formation-lap/start and the very end. Timing remains stochastic
+    # because the user chooses occurrence type, not the exact neutralisation lap.
+    return rng.integers(3, race_laps - 2, size=n)
+
+
+def _neutralisation_pit_loss(inputs: SimulationInputs) -> float:
+    mode = str(inputs.neutralisation_mode or "NONE").upper()
+    green = float(inputs.circuit.pit_loss_green)
+    sc_loss = float(inputs.circuit.pit_loss_sc)
+    if mode == "SC":
+        return sc_loss
+    if mode == "VSC":
+        # VSC benefit is modelled as smaller than a full Safety Car.
+        return green - 0.62 * (green - sc_loss)
+    return green
+
+
+def _effective_neutralisation_probability(inputs: SimulationInputs) -> float:
+    mode = str(inputs.neutralisation_mode or "NONE").upper()
+    if mode == "SC":
+        return 1.0
+    if mode == "VSC":
+        return 0.75
+    return 0.0
+
+
 def _simulate_cost(
     compounds: list[str],
     stint_lengths: list[int],
     inputs: SimulationInputs,
     rng: np.random.Generator,
     n: int,
+    pit_laps: list[int] | None = None,
+    neutralisation_laps: np.ndarray | None = None,
 ):
     costs = np.zeros(n, dtype=float)
     deg_shock = rng.lognormal(mean=0.0, sigma=0.16, size=n)
     traffic_shock = rng.gamma(shape=1.8, scale=0.85, size=n)
-    sc = rng.random(n) < inputs.sc_probability
     rain = rng.random(n) < inputs.rain_probability
 
     for comp, stint_laps in zip(compounds, stint_lengths):
@@ -265,24 +347,30 @@ def _simulate_cost(
         costs += deg * deg_shock * stint_laps * (stint_laps - 1) / 2.0
 
     stops = len(compounds) - 1
-    sc_alignment = min(0.88, 0.42 + 0.16 * stops)
-    effective_pit = inputs.circuit.pit_loss_green - sc.astype(float) * sc_alignment * (
-        inputs.circuit.pit_loss_green - inputs.circuit.pit_loss_sc
-    )
-    costs += stops * effective_pit
+    if pit_laps is None:
+        pit_laps = list(np.cumsum(stint_lengths)[:-1].astype(int))
+
+    if neutralisation_laps is None:
+        neutralisation_laps = _sample_neutralisation_laps(inputs, rng, n)
+
+    cheap_loss = _neutralisation_pit_loss(inputs)
+    green_loss = float(inputs.circuit.pit_loss_green)
+
+    # Only stops close to the neutralisation event receive the cheap-stop benefit.
+    # A ±2 lap window is a practical race-strategy approximation.
+    for pit_lap in pit_laps:
+        aligned = np.abs(neutralisation_laps - int(pit_lap)) <= 2
+        costs += np.where(aligned, cheap_loss, green_loss)
+
     costs += stops * inputs.circuit.overtaking_difficulty * (1.7 + 2.8 * traffic_shock)
     costs -= stops * inputs.circuit.undercut_power * (0.9 + 1.8 * rng.random(n))
 
     if compounds[0] == "SOFT":
-        # Start-performance upside, with some launch variance.
         costs -= 1.0 + rng.normal(0.0, 0.65, size=n)
 
-    # A pre-race slick strategy loses relevance if rain arrives; this is reflected
-    # as a broad scenario penalty, not as a detailed wet-crossover model.
     costs += rain.astype(float) * 15.0
     costs += inputs.driver.race_pace_delta * inputs.circuit.race_laps
     return costs
-
 
 def enumerate_legal_strategies(
     inputs: SimulationInputs,
@@ -341,6 +429,7 @@ def _generic_rival_strategy_pool(
     inputs: SimulationInputs,
     n: int,
     seed: int = 7711,
+    neutralisation_laps: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[list[str]]]:
     """Build a reusable stochastic strategy pool for the field.
 
@@ -367,6 +456,7 @@ def _generic_rival_strategy_pool(
         simulations=n,
         mandatory_race_compounds=inputs.mandatory_race_compounds,
         rivals=None,
+        neutralisation_mode=inputs.neutralisation_mode,
     )
 
     candidates = enumerate_legal_strategies(neutral_inputs, start_compound=None, stops=(1, 2))
@@ -377,7 +467,15 @@ def _generic_rival_strategy_pool(
     for idx, seq in enumerate(candidates):
         pits, lengths, _ = optimise_pit_laps(seq, neutral_inputs)
         rng = np.random.default_rng(seed + idx * 103)
-        arr = _simulate_cost(seq, lengths, neutral_inputs, rng, n)
+        arr = _simulate_cost(
+            seq,
+            lengths,
+            neutral_inputs,
+            rng,
+            n,
+            pit_laps=pits,
+            neutralisation_laps=neutralisation_laps,
+        )
         arrays.append(arr)
         means.append(float(np.mean(arr)))
         kept.append(seq)
@@ -406,13 +504,9 @@ def _full_grid_finish_distribution(
     selected_costs: np.ndarray,
     inputs: SimulationInputs,
     rng: np.random.Generator,
+    neutralisation_laps: np.ndarray | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    """Convert simulated race times into finishing positions by racing the full field.
-
-    Position is now obtained by ordering simulated race-time scores for the
-    selected driver and every rival. It is no longer inferred from a
-    seconds-to-positions conversion.
-    """
+    """Simulate and rank the complete field for every Monte Carlo race."""
     n = len(selected_costs)
     selected_name = inputs.driver.driver_name.strip().lower()
 
@@ -431,21 +525,28 @@ def _full_grid_finish_distribution(
         rivals = _synthetic_rivals(inputs)
 
     total_cars = len(rivals) + 1
+    strategy_matrix, strategy_probs, _ = _generic_rival_strategy_pool(
+        inputs,
+        n,
+        neutralisation_laps=neutralisation_laps,
+    )
 
-    # Common strategic menu for the rest of the field.
-    strategy_matrix, strategy_probs, _ = _generic_rival_strategy_pool(inputs, n)
+    mode = str(inputs.neutralisation_mode or "NONE").upper()
+    if mode == "SC":
+        grid_time_factor = (0.11 + 0.10 * inputs.circuit.overtaking_difficulty) * 0.48
+    elif mode == "VSC":
+        grid_time_factor = (0.11 + 0.10 * inputs.circuit.overtaking_difficulty) * 0.82
+    else:
+        grid_time_factor = 0.11 + 0.10 * inputs.circuit.overtaking_difficulty
 
-    # Selected driver race-time score. Strategy simulation already contains the
-    # selected driver's race-pace delta across the race.
     selected_grid = int(np.clip(inputs.driver.grid_position, 1, total_cars))
-    grid_time_factor = 0.11 + 0.10 * inputs.circuit.overtaking_difficulty
     selected_time = selected_costs.copy()
     selected_time += (selected_grid - 1) * grid_time_factor
     selected_time += rng.normal(0.0, 0.55, size=n)
 
-    # Small DNF model. This is deliberately conservative and shared by all cars.
+    neutral_p = _effective_neutralisation_probability(inputs)
     selected_dnf_p = float(np.clip(
-        0.030 + 0.035 * inputs.sc_probability + 0.070 * inputs.rain_probability,
+        0.030 + 0.025 * neutral_p + 0.070 * inputs.rain_probability,
         0.025,
         0.16,
     ))
@@ -454,7 +555,6 @@ def _full_grid_finish_distribution(
     rival_times = np.empty((n, len(rivals)), dtype=float)
 
     for j, rival in enumerate(rivals):
-        # Each rival independently samples from the competitive strategy pool.
         choice = rng.choice(strategy_matrix.shape[1], size=n, p=strategy_probs)
         race_strategy = strategy_matrix[np.arange(n), choice].copy()
 
@@ -465,12 +565,8 @@ def _full_grid_finish_distribution(
         except Exception:
             grid_position = min(total_cars, j + 1)
 
-        # The long-run delta is converted into race-time delta directly:
-        # 0.20 s/lap over 57 laps = 11.4 s, not an arbitrary number of positions.
         race_strategy += pace_delta * inputs.circuit.race_laps
         race_strategy += (max(1, grid_position) - 1) * grid_time_factor
-
-        # Driver/team execution variance: starts, traffic, stop execution and pace noise.
         race_strategy += rng.normal(
             0.0,
             1.25 + 0.75 * inputs.circuit.overtaking_difficulty,
@@ -478,19 +574,66 @@ def _full_grid_finish_distribution(
         )
 
         rival_dnf_p = float(np.clip(
-            0.035 + 0.040 * inputs.sc_probability + 0.075 * inputs.rain_probability,
+            0.035 + 0.028 * neutral_p + 0.075 * inputs.rain_probability,
             0.03,
             0.18,
         ))
         rival_dnf = rng.random(n) < rival_dnf_p
-        race_strategy[rival_dnf] = np.inf
+
+        # Give DNFs a very large but unique race-time score to preserve a complete order.
+        race_strategy[rival_dnf] = 1_000_000.0 + rng.uniform(0, 1000, rival_dnf.sum())
         rival_times[:, j] = race_strategy
 
-    finishes = 1 + np.sum(rival_times < selected_time[:, None], axis=1)
-    finishes = finishes.astype(int)
+    selected_time[selected_dnf] = 1_000_000.0 + rng.uniform(0, 1000, selected_dnf.sum())
 
-    # A selected-driver DNF is placed at the back of the simulated field.
-    finishes[selected_dnf] = total_cars
+    all_times = np.column_stack([selected_time, rival_times])
+    order = np.argsort(all_times, axis=1)
+    ranks = np.empty_like(order)
+    row_index = np.arange(n)[:, None]
+    ranks[row_index, order] = np.arange(1, total_cars + 1)[None, :]
+
+    finishes = ranks[:, 0].astype(int)
+
+    driver_rows = [{
+        "driver_name": inputs.driver.driver_name,
+        "team_name": inputs.driver.team_name,
+        "grid_position": selected_grid,
+        "selected_driver": True,
+        "ranks": ranks[:, 0].astype(int),
+    }]
+    for j, rival in enumerate(rivals, start=1):
+        gp = rival.get("grid_position")
+        try:
+            gp = int(gp)
+        except Exception:
+            gp = None
+        driver_rows.append({
+            "driver_name": str(rival.get("driver_name") or rival.get("abbreviation") or f"Rival {j}"),
+            "team_name": str(rival.get("team_name") or ""),
+            "grid_position": gp,
+            "selected_driver": False,
+            "ranks": ranks[:, j].astype(int),
+        })
+
+    estimated_classification = []
+    for row in driver_rows:
+        rr = row["ranks"]
+        mode_rank = int(pd.Series(rr).mode().iloc[0])
+        estimated_classification.append({
+            "driver_name": row["driver_name"],
+            "team_name": row["team_name"],
+            "grid_position": row["grid_position"],
+            "selected_driver": row["selected_driver"],
+            "expected_finish": float(np.mean(rr)),
+            "most_likely_finish": mode_rank,
+            "win_probability": float(np.mean(rr == 1)),
+            "podium_probability": float(np.mean(rr <= 3)),
+            "points_probability": float(np.mean(rr <= 10)),
+        })
+
+    estimated_classification.sort(key=lambda x: (x["expected_finish"], x["most_likely_finish"]))
+    for projected_position, row in enumerate(estimated_classification, start=1):
+        row["projected_position"] = projected_position
 
     real_pace_count = sum(
         1 for r in rivals
@@ -517,6 +660,7 @@ def _full_grid_finish_distribution(
         "race_model_confidence": confidence,
         "synthetic_grid": using_synthetic,
         "selected_dnf_probability": selected_dnf_p,
+        "estimated_classification": estimated_classification,
     }
     return finishes, meta
 
@@ -524,17 +668,32 @@ def simulate_selected_strategy(
     inputs: SimulationInputs,
     compounds: list[str],
     compare_same_start: bool = True,
+    pit_laps_override: list[int] | None = None,
 ) -> Dict[str, Any]:
     compounds = [c.upper() for c in compounds]
     valid, reasons = validate_strategy(compounds, inputs)
     if not valid:
         raise ValueError(" | ".join(reasons))
 
-    pit_laps, stint_lengths, deterministic = optimise_pit_laps(compounds, inputs)
+    if pit_laps_override is not None:
+        pit_laps = [int(x) for x in pit_laps_override]
+        stint_lengths, deterministic = _fixed_plan_cost(compounds, pit_laps, inputs)
+    else:
+        pit_laps, stint_lengths, deterministic = optimise_pit_laps(compounds, inputs)
+
     n = int(inputs.simulations)
     rng = np.random.default_rng(260913)
+    neutralisation_laps = _sample_neutralisation_laps(inputs, rng, n)
 
-    selected_costs = _simulate_cost(compounds, stint_lengths, inputs, rng, n)
+    selected_costs = _simulate_cost(
+        compounds,
+        stint_lengths,
+        inputs,
+        rng,
+        n,
+        pit_laps=pit_laps,
+        neutralisation_laps=neutralisation_laps,
+    )
 
     alternatives = enumerate_legal_strategies(
         inputs,
@@ -543,12 +702,20 @@ def simulate_selected_strategy(
     )
     alt_rows = []
     alt_cost_arrays = []
+
     for seq in alternatives:
         pits, lengths, det = optimise_pit_laps(seq, inputs)
-        # Use a deterministic seed per sequence so Streamlit reruns are stable.
         seed = 260913 + sum((i + 1) * ord(c[0]) for i, c in enumerate(seq))
         seq_rng = np.random.default_rng(seed)
-        arr = _simulate_cost(seq, lengths, inputs, seq_rng, n)
+        arr = _simulate_cost(
+            seq,
+            lengths,
+            inputs,
+            seq_rng,
+            n,
+            pit_laps=pits,
+            neutralisation_laps=neutralisation_laps,
+        )
         alt_cost_arrays.append(arr)
         alt_rows.append({
             "strategy": _strategy_name(seq),
@@ -563,19 +730,26 @@ def simulate_selected_strategy(
         raise ValueError("No legal comparison strategies are available with this tyre inventory.")
 
     matrix = np.vstack(alt_cost_arrays).T
-    per_run_best = np.min(matrix, axis=1)
     optimal_idx = np.argmin(np.mean(matrix, axis=0))
     optimal = alt_rows[int(optimal_idx)]
 
-    # Selected optimality: probability it beats every feasible same-start strategy in each run.
     selected_idx = next(
         (i for i, row in enumerate(alt_rows) if row["compounds"] == compounds),
         None
     )
-    optimal_probability = float(np.mean(np.argmin(matrix, axis=1) == selected_idx)) if selected_idx is not None else 0.0
+    optimal_probability = (
+        float(np.mean(np.argmin(matrix, axis=1) == selected_idx))
+        if selected_idx is not None
+        else 0.0
+    )
 
     finish_rng = np.random.default_rng(99173)
-    finishes, race_meta = _full_grid_finish_distribution(selected_costs, inputs, finish_rng)
+    finishes, race_meta = _full_grid_finish_distribution(
+        selected_costs,
+        inputs,
+        finish_rng,
+        neutralisation_laps=neutralisation_laps,
+    )
 
     expected_finish = float(np.mean(finishes))
     finish_mode = int(pd.Series(finishes).mode().iloc[0])
@@ -587,12 +761,14 @@ def simulate_selected_strategy(
 
     selected_mean = float(np.mean(selected_costs))
     delta_to_opt = selected_mean - float(optimal["expected_cost_s"])
-    result = {
+
+    return {
         "strategy": _strategy_name(compounds),
         "compounds": compounds,
         "pit_laps": pit_laps,
-        "pit_window": _pit_window(pit_laps, inputs.circuit.race_laps),
+        "pit_window": " / ".join(f"L{p}" for p in pit_laps),
         "stint_lengths": stint_lengths,
+        "neutralisation_mode": str(inputs.neutralisation_mode or "NONE").upper(),
         "expected_cost_s": selected_mean,
         "delta_to_optimal_s": delta_to_opt,
         "expected_finish": expected_finish,
@@ -613,14 +789,14 @@ def simulate_selected_strategy(
         "race_model_confidence": race_meta["race_model_confidence"],
         "synthetic_grid": race_meta["synthetic_grid"],
         "selected_dnf_probability": race_meta["selected_dnf_probability"],
+        "estimated_classification": race_meta["estimated_classification"],
         "optimal": optimal,
         "alternatives": sorted(alt_rows, key=lambda r: r["expected_cost_s"]),
     }
-    return result
-
 
 def scenario_probabilities(inputs: SimulationInputs) -> list[dict[str, Any]]:
-    p_sc = float(np.clip(inputs.sc_probability, 0, 1))
+    mode = str(inputs.neutralisation_mode or "NONE").upper()
+    p_sc = 1.0 if mode in {"SC", "VSC"} else 0.0
     p_rain = float(np.clip(inputs.rain_probability, 0, 1))
     med_deg = inputs.tyres["MEDIUM"].degradation
     p_high_deg = float(np.clip((med_deg - 0.05) / 0.13, 0.12, 0.75))

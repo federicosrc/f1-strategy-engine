@@ -1,67 +1,57 @@
-# F1 Strategy Engine — V1.6
+# F1 Strategy Engine — V1.7
 
-V1.5 removes OpenF1 from pre-race mode.
+V1.7 adds explicit race-scenario and pit-lap controls and simplifies the dashboard.
 
-## Sources
+## New controls
+The top row now contains:
+- Grand Prix
+- Driver
+- starting tyre
+- number of stops
+- Stint 2 compound
+- Stint 3 compound
+- neutralisation: No SC/VSC, Safety Car, or Virtual Safety Car
+- Pit lap 1
+- Pit lap 2
+
+The selected pit laps are fixed inputs to the Monte Carlo model.
+
+## Safety Car / VSC logic
+Choosing Safety Car or VSC guarantees that neutralisation type in the simulated race scenario, but does not make every stop cheaper.
+
+The neutralisation lap is sampled within each Monte Carlo race. A pit stop receives the reduced neutralisation pit-loss only when it falls within the modelled event window. VSC receives a smaller pit-loss benefit than a full Safety Car.
+
+## Dashboard changes
+- The old Tyre Compounds panel has been removed.
+- `Your Strategy` now occupies that area.
+- `Weather & Track` is directly below the circuit.
+- `Data Quality & Confidence` has been removed from the visible dashboard.
+- A complete `Estimated Final Classification` has been added.
+- The selected driver remains highlighted in the projected classification.
+
+## Estimated classification
+The full-grid engine simulates the selected driver plus the rest of the field in every Monte Carlo race. The classification table is ordered by average simulated finishing position and shows:
+- projected position
+- driver
+- team
+- grid position
+- average simulated finish
+- podium probability
+
+## Data sources
 - Formula1.com official: current-season calendar, circuit information and track map
-- Pirelli official: current-season compound nominations
-- Open-Meteo: race forecast
-- FastF1: completed FP1/FP2/FP3 timing, driver laps, compounds, TyreLife, stint evidence and qualifying result
-- Strategy Engine: FIA legality filter, degradation, race pace, pit-window optimisation and Monte Carlo
-
-## What FastF1 feeds into the model
-- driver race-pace delta
-- Soft / Medium / Hard degradation
-- qualifying position when available
-- current-weekend practice quality
-- evidence of which compounds were used
-
-Telemetry and FastF1 weather are disabled to keep the app lighter.
-
-## Graceful fallback
-If FastF1 cannot load a session, the simulation still runs with conservative fallback values. No large source-error banner is shown; the Data Quality panel marks those inputs LOW confidence.
-
-## Important limitation
-FastF1 does not provide the authoritative remaining tyre-set inventory. Tyre availability remains LOW confidence and overrideable.
+- Pirelli: current-season tyre nominations
+- Open-Meteo: race weather forecast
+- FastF1: current-weekend practice, long-run pace, tyre degradation and qualifying/grid evidence
 
 ## GitHub update
 Replace:
-- app.py
-- data_sources.py
-- requirements.txt
-- README.md
+- `app.py`
+- `strategy_engine.py`
+- `README.md`
 
-Keep:
-- official_sources.py
-- strategy_engine.py
-- .streamlit/config.toml
-
-
-## V1.5.1 UI changes
-- Fixes the accidental Streamlit source-code/debug rendering below the strategy panel.
-- Makes the final finishing position the largest visual result.
-- Replaces the ambiguous strategy-cost histogram with a direct Your plan vs Best plan benchmark.
-- Explains the meaning of strategy cost.
-- Keeps the Monte Carlo finish-position distribution and labels its purpose explicitly.
-
-
-## V1.6 — full-grid race outcome engine
-
-The estimated finishing position is no longer calculated by converting a time penalty into an arbitrary number of positions.
-
-FastF1 now builds a current-weekend model of the field:
-- qualifying/grid position
-- compound-normalised long-run pace delta
-- team/driver identity
-- data-confidence flags
-
-For every Monte Carlo run:
-1. the selected driver's chosen strategy produces a simulated race-time score;
-2. every rival samples a competitive legal strategy;
-3. each rival's long-run pace is accumulated over the full race distance;
-4. grid position, traffic/execution variance, SC/rain effects and DNF risk are applied;
-5. simulated race times are ordered to create the finishing classification.
-
-The app then reports the actual Monte Carlo finishing-position distribution.
-
-The estimated final position is now displayed immediately below the strategy controls.
+Keep the existing:
+- `data_sources.py`
+- `official_sources.py`
+- `requirements.txt`
+- `.streamlit/config.toml`
