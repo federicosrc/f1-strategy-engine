@@ -1,9 +1,28 @@
-# F1 Strategy Engine — V1.9
+# F1 Strategy Engine — V2.0
 
-## Weather labels
-`Forecast` has been replaced by **Expected conditions**.
+V2.0 turns the project into a race-scenario simulator rather than a static pre-race calculator.
 
-Available scenarios:
+## New: race scenario timeline
+
+The dashboard now visualises the complete scenario on one horizontal race timeline:
+
+- tyre stints
+- pit-stop laps
+- weather phases
+- exact Safety Car / VSC timing when selected
+
+Soft, Medium, Hard, Intermediate and Wet use distinct tyre colours.
+
+## New: multi-phase weather
+
+Choose:
+
+- Static
+- 2 phases
+- 3 phases
+
+Each phase can be:
+
 - Expected conditions
 - Dry
 - Hot & dry
@@ -12,40 +31,59 @@ Available scenarios:
 - Rain
 - Heavy rain
 
-## Wet-weather tyres
-When wet weather is plausible, the tyre menus also show:
-- INTERMEDIATE
-- WET
+For multi-phase weather you choose the lap at which the next phase starts.
 
-They are enabled for Changeable, Rain and Heavy rain scenarios, and also for Expected conditions when the race-time rain probability is at least 20%.
+Example:
 
-## Regulation logic
-If a strategy uses Intermediate or Wet tyres, the dry-race requirement to use two different slick specifications is not enforced.
+- L1–L21 Dry
+- L22–L39 Rain
+- L40–L57 Heavy rain
 
-If the strategy uses slicks only, the normal dry tyre rule remains active.
+The strategy engine evaluates each stint against the weather actually present during those laps.
 
-## Performance logic
-Intermediate and Wet are not cosmetic menu options.
+## New: Safety Car / VSC timing
 
-The model applies condition-dependent pace penalties:
-- Intermediate is strongly penalised on a dry track and favoured in normal rain.
-- Wet is heavily penalised on a dry track and favoured in heavy rain.
-- Slicks receive large penalties when a simulated race is wet.
+Choose:
 
-This lets the engine compare plans such as:
-- M → I
-- I → W
-- I → I
-- W → I
-- M → I → M
+- No SC / VSC
+- Safety Car
+- Virtual Safety Car
+
+For SC/VSC choose either:
+
+- Random timing
+- a specific race lap
+
+A pit stop only receives the neutralisation pit-loss benefit when it occurs close to the event.
+
+## Engine changes
+
+Pit timing optimisation is now weather-timeline aware.
+
+For example, if rain starts on lap 23, an Intermediate switch around that transition can become preferable to a dry-only pit window.
+
+The full-grid Monte Carlo model uses the same race scenario for every driver in each simulation.
+
+## Interface
+
+The interface has been reworked toward a pit-wall dashboard:
+
+1. Race & Strategy
+2. Scenario Evolution
+3. Outcome
+4. Race Scenario Timeline
+5. Circuit / Weather Evolution / Your Strategy
+6. Strategy Benchmark
+7. Estimated Final Classification
 
 ## GitHub update
+
 Replace:
 - `app.py`
 - `data_sources.py`
 - `README.md`
 
 Add:
-- `strategy_engine_v19.py`
+- `strategy_engine_v20.py`
 
-V1.9 imports `strategy_engine_v19.py`, so the older v18/v17 engine files can remain in the repository without being used.
+Older engine versions may remain in the repository. V2.0 imports only `strategy_engine_v20.py`.
