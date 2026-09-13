@@ -1,63 +1,37 @@
-# F1 Strategy Engine — V1.4.1
+# F1 Strategy Engine — V1.5
 
-V1.4.1 changes the application from a passive strategy predictor into a user-driven race strategy simulator.
+V1.5 removes OpenF1 from pre-race mode.
 
-## Workflow
+## Sources
+- Formula1.com official: current-season calendar, circuit information and track map
+- Pirelli official: current-season compound nominations
+- Open-Meteo: race forecast
+- FastF1: completed FP1/FP2/FP3 timing, driver laps, compounds, TyreLife, stint evidence and qualifying result
+- Strategy Engine: FIA legality filter, degradation, race pace, pit-window optimisation and Monte Carlo
 
-1. Choose the current-season Grand Prix.
-2. Choose the driver.
-3. Choose the starting tyre.
-4. Choose 1 or 2 pit stops.
-5. Choose the following tyre compounds.
-6. Press **Simulate my strategy**.
+## What FastF1 feeds into the model
+- driver race-pace delta
+- Soft / Medium / Hard degradation
+- qualifying position when available
+- current-weekend practice quality
+- evidence of which compounds were used
 
-The dashboard returns:
-- expected finish
-- most likely finish
-- win / podium / top-5 probabilities
-- automatically optimised pit windows
-- strategy cost versus the model optimum
-- finish-position distribution
-- scenario probabilities
+Telemetry and FastF1 weather are disabled to keep the app lighter.
 
-## Regulation filter
-
-For a planned dry race the app enforces:
-- at least two different dry tyre specifications;
-- at least one mandatory Race tyre specification;
-- enough tyre sets for the chosen sequence.
-
-If Intermediate or Wet tyres are used during the actual race, the dry two-specification requirement no longer applies.
-
-## Data sources
-
-- Formula 1 official: current-season calendar and circuit data
-- Pirelli: current-season compound nominations
-- Open-Meteo: race weather forecast
-- OpenF1: current-weekend driver grid, practice laps, stints and degradation inputs
+## Graceful fallback
+If FastF1 cannot load a session, the simulation still runs with conservative fallback values. No large source-error banner is shown; the Data Quality panel marks those inputs LOW confidence.
 
 ## Important limitation
+FastF1 does not provide the authoritative remaining tyre-set inventory. Tyre availability remains LOW confidence and overrideable.
 
-Remaining tyre sets are still the weakest automatic variable in V1.4.1. The app keeps this value overrideable.
-
-## Update the existing GitHub repository
-
+## GitHub update
 Replace:
-- `app.py`
-- `strategy_engine.py`
-- `README.md`
+- app.py
+- data_sources.py
+- requirements.txt
+- README.md
 
 Keep:
-- `data_sources.py`
-- `official_sources.py`
-- `requirements.txt`
-- `.streamlit/config.toml`
-
-Streamlit Community Cloud should redeploy automatically after the commit.
-
-
-## UI change in V1.4.1
-- Monte Carlo simulations are fixed at 30,000 and no longer exposed as an input.
-- Grand Prix, Driver, Start tyre, Pit stops, Stint 2 and Stint 3 are on a single row.
-- Stint 3 is disabled when one stop is selected.
-- Simulate my strategy and Find optimal strategy remain centered below the input row.
+- official_sources.py
+- strategy_engine.py
+- .streamlit/config.toml

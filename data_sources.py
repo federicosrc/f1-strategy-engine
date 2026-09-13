@@ -1,124 +1,20 @@
 from __future__ import annotations
 
-import threading
-import time
-from datetime import datetime, timezone
+from datetime import datetime
+from pathlib import Path
 from typing import Any
+import logging
 
 import numpy as np
 import pandas as pd
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
-OPENF1_BASE = "https://api.openf1.org/v1"
 OPEN_METEO_BASE = "https://api.open-meteo.com/v1/forecast"
 GEOCODE_BASE = "https://geocoding-api.open-meteo.com/v1/search"
 
 
 class APIError(RuntimeError):
     pass
-
-
-class OpenF1Client:
-    """OpenF1 client designed to be polite to the free endpoint.
-
-    V1 made several calls on every Streamlit rerun. V1.2 does the opposite:
-    - nothing heavy is requested before the user presses ANALYSE;
-    - calls are throttled;
-    - 429 respects Retry-After / exponential backoff;
-    - completed session payloads are cached in memory for the app process.
-    """
-
-    def __init__(self, timeout: int = 20, min_interval: float = 2.05):
-        self.timeout = timeout
-        self.min_interval = min_interval
-        self.session = requests.Session()
-        retry = Retry(
-            total=4,
-            connect=4,
-            read=4,
-            backoff_factor=1.4,
-            status_forcelist=(429, 500, 502, 503, 504),
-            allowed_methods=frozenset(["GET"]),
-            respect_retry_after_header=True,
-            raise_on_status=False,
-        )
-        self.session.mount("https://", HTTPAdapter(max_retries=retry, pool_connections=4, pool_maxsize=4))
-        self.session.headers.update({"User-Agent": "F1StrategyEngine/1.3"})
-        self._lock = threading.Lock()
-        self._last_network_call = 0.0
-        self._cache: dict[tuple, tuple[float, Any]] = {}
-
-    def _cache_get(self, key, ttl):
-        item = self._cache.get(key)
-        if not item:
-            return None
-        ts, value = item
-        if time.time() - ts <= ttl:
-            return value
-        self._cache.pop(key, None)
-        return None
-
-    def _cache_put(self, key, value):
-        self._cache[key] = (time.time(), value)
-
-    def _throttle(self):
-        with self._lock:
-            wait = self.min_interval - (time.monotonic() - self._last_network_call)
-            if wait > 0:
-                time.sleep(wait)
-            self._last_network_call = time.monotonic()
-
-    def _get(self, endpoint: str, params: dict[str, Any] | None = None, ttl: int = 900):
-        params = params or {}
-        key = (endpoint, tuple(sorted((str(k), str(v)) for k, v in params.items())))
-        cached = self._cache_get(key, ttl)
-        if cached is not None:
-            return cached
-
-        self._throttle()
-        r = self.session.get(f"{OPENF1_BASE}/{endpoint}", params=params, timeout=self.timeout)
-        if r.status_code == 429:
-            raise APIError("OpenF1 rate limit reached. Cached data remain available; retry in about a minute.")
-        if not r.ok:
-            raise APIError(f"OpenF1 {endpoint}: HTTP {r.status_code}")
-        data = r.json()
-        self._cache_put(key, data)
-        return data
-
-    def meetings(self, year: int):
-        return self._get("meetings", {"year": year}, ttl=3600)
-
-    def sessions(self, meeting_key: int):
-        return self._get("sessions", {"meeting_key": meeting_key}, ttl=3600)
-
-    def drivers(self, session_key: int):
-        return self._get("drivers", {"session_key": session_key}, ttl=3600)
-
-    def starting_grid(self, session_key: int):
-        return self._get("starting_grid", {"session_key": session_key}, ttl=1800)
-
-    def stints(self, session_key: int):
-        return self._get("stints", {"session_key": session_key}, ttl=1800)
-
-    def laps(self, session_key: int):
-        return self._get("laps", {"session_key": session_key}, ttl=1800)
-
-    def race_control(self, session_key: int):
-        return self._get("race_control", {"session_key": session_key}, ttl=1800)
-
-    def pit(self, session_key: int):
-        return self._get("pit", {"session_key": session_key}, ttl=900)
-
-    def weather(self, session_key: int):
-        return self._get("weather", {"session_key": session_key}, ttl=300)
-
-    def intervals(self, session_key: int, driver_number: int):
-        return self._get("intervals", {"session_key": session_key, "driver_number": driver_number}, ttl=8)
-
-    def positions(self, session_key: int, driver_number: int):
-        return self._get("position", {"session_key": session_key, "driver_number": driver_number}, ttl=8)
 
 
 class OpenMeteoClient:
@@ -157,7 +53,9 @@ class OpenMeteoClient:
                 "latitude": lat,
                 "longitude": lon,
                 "hourly": ",".join(hourly),
-                "current": ",".join(["temperature_2m", "relative_humidity_2m", "wind_speed_10m", "precipitation"]),
+                "current": ",".join(
+                    ["temperature_2m", "relative_humidity_2m", "wind_speed_10m", "precipitation"]
+                ),
                 "timezone": "UTC",
                 "forecast_days": 16,
             },
@@ -165,19 +63,16 @@ class OpenMeteoClient:
         )
         if not r.ok:
             raise APIError(f"Open-Meteo forecast: HTTP {r.status_code}")
+
         payload = r.json()
         data = payload["hourly"]
         times = pd.to_datetime(data["time"], utc=True)
-        if race_time_utc is None:
-            target = pd.Timestamp.now(tz="UTC")
-        else:
-            target = pd.Timestamp(race_time_utc)
+        target = pd.Timestamp.now(tz="UTC") if race_time_utc is None else pd.Timestamp(race_time_utc)
         idx = int(np.argmin(np.abs(times - target)))
         out = {k: data[k][idx] for k in data if k != "time"}
         out["time"] = times[idx].isoformat()
         out["current"] = payload.get("current", {})
 
-        # Asphalt proxy: deliberately labelled as an estimate in the UI.
         air = float(out.get("temperature_2m") or 20.0)
         solar = float(out.get("shortwave_radiation") or 0.0)
         cloud = float(out.get("cloud_cover") or 0.0)
@@ -189,153 +84,270 @@ class OpenMeteoClient:
         return out
 
 
-def resolve_meeting(openf1: OpenF1Client, event: dict[str, Any], year: int):
-    meetings = openf1.meetings(year)
-    if not meetings:
-        raise APIError("No OpenF1 meetings found for current season")
+class FastF1DataClient:
+    """Pre-race current-weekend analysis powered by FastF1 only."""
 
-    key = event.get("key", "").lower()
-    name = event.get("name", "").lower()
-    loc = event.get("location", "").lower()
-    country = event.get("country", "").lower()
+    def __init__(self, cache_dir: str = "/tmp/f1_strategy_fastf1_cache"):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._fastf1 = None
+        self._import_error = None
+        try:
+            import fastf1
+            self._fastf1 = fastf1
+            try:
+                fastf1.Cache.enable_cache(str(self.cache_dir))
+            except Exception:
+                pass
+            for name in ("fastf1", "fastf1.req", "fastf1.core", "fastf1.events"):
+                logging.getLogger(name).setLevel(logging.WARNING)
+        except Exception as exc:
+            self._import_error = str(exc)
 
-    aliases = {
-        "spain": ["spain", "madrid"],
-        "barcelona-catalunya": ["barcelona", "catalunya"],
-        "bahrain": ["bahrain", "malaysia", "kuala lumpur", "sepang"],
-        "united-states": ["united states", "austin"],
-        "great-britain": ["great britain", "silverstone"],
-    }
-    terms = set([key.replace("-", " "), name, loc, country] + aliases.get(key, []))
+    @property
+    def available(self):
+        return self._fastf1 is not None
 
-    def score(m):
-        hay = " ".join(str(m.get(k, "")) for k in ["meeting_name", "meeting_official_name", "location", "country_name", "circuit_short_name"]).lower()
-        return sum(3 if t and t in hay else 0 for t in terms)
+    def _load_session(self, year: int, round_number: int, code: str, load_laps: bool = True):
+        if self._fastf1 is None:
+            raise APIError(f"FastF1 unavailable: {self._import_error or 'not installed'}")
+        session = self._fastf1.get_session(int(year), int(round_number), code)
+        session.load(laps=load_laps, telemetry=False, weather=False, messages=False)
+        return session
 
-    ranked = sorted(meetings, key=score, reverse=True)
-    if score(ranked[0]) <= 0:
-        raise APIError(f"Could not match {event.get('name')} to OpenF1")
-    return ranked[0]
-
-
-def _session_completed(session: dict[str, Any]) -> bool:
-    end = session.get("date_end") or session.get("date_start")
-    if not end:
-        return True
-    try:
-        return pd.to_datetime(end, utc=True) <= pd.Timestamp.now(tz="UTC")
-    except Exception:
-        return True
-
-
-def select_practice_sessions(sessions: list[dict[str, Any]]):
-    practices = [s for s in sessions if s.get("session_name") in {"Practice 1", "Practice 2", "Practice 3"} and _session_completed(s)]
-    order = {"Practice 3": 3, "Practice 2": 2, "Practice 1": 1}
-    return sorted(practices, key=lambda s: order.get(s.get("session_name"), 0), reverse=True)
-
-
-def _driver_number(drivers: list[dict[str, Any]], selected_name: str):
-    target = selected_name.lower().strip()
-    best = None
-    for d in drivers:
-        full = str(d.get("full_name", "")).lower().strip()
-        broadcast = str(d.get("broadcast_name", "")).lower().strip()
-        if target == full or target == broadcast or target in full or full in target:
-            return int(d["driver_number"]), d
-        if target.split()[-1] in full:
-            best = d
-    if best:
-        return int(best["driver_number"]), best
-    raise APIError(f"Driver {selected_name} not found in OpenF1 session")
-
-
-def practice_dataset(openf1: OpenF1Client, session: dict, driver_number: int):
-    laps = pd.DataFrame(openf1.laps(session["session_key"]))
-    stints = pd.DataFrame(openf1.stints(session["session_key"]))
-    if laps.empty or stints.empty:
-        return pd.DataFrame(), laps, pd.DataFrame()
-
-    dlaps = laps[laps["driver_number"] == driver_number].copy()
-    dstints = stints[stints["driver_number"] == driver_number].copy()
-    if dlaps.empty or dstints.empty:
-        return pd.DataFrame(), laps, dstints
-
-    dlaps = dlaps[dlaps["lap_duration"].notna()].copy()
-    if "is_pit_out_lap" in dlaps:
-        dlaps = dlaps[~dlaps["is_pit_out_lap"].fillna(False)]
-
-    rows = []
-    for _, st in dstints.iterrows():
-        if pd.isna(st.get("lap_start")):
-            continue
-        ls = int(st["lap_start"])
-        le = int(st["lap_end"]) if pd.notna(st.get("lap_end")) else int(dlaps["lap_number"].max())
-        comp = str(st.get("compound", "")).upper()
-        tyre0 = int(st.get("tyre_age_at_start") or 0)
-        if comp not in {"SOFT", "MEDIUM", "HARD"}:
-            continue
-        sl = dlaps[(dlaps["lap_number"] >= ls) & (dlaps["lap_number"] <= le)].copy()
-        if len(sl) < 4:
-            continue
-        sl["tyre_age"] = tyre0 + (sl["lap_number"] - ls)
-        sl["compound"] = comp
-        sl["stint_id"] = f"{session['session_key']}-{int(st.get('stint_number', 0))}"
-        rows.append(sl[["lap_duration", "lap_number", "tyre_age", "compound", "stint_id"]])
-    return (pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()), laps, dstints
-
-
-def race_pace_delta(all_laps: pd.DataFrame, driver_number: int):
-    if all_laps is None or all_laps.empty or "lap_duration" not in all_laps:
-        return 0.0
-    clean = all_laps[all_laps["lap_duration"].notna()].copy()
-    if "is_pit_out_lap" in clean:
-        clean = clean[~clean["is_pit_out_lap"].fillna(False)]
-    if len(clean) < 20:
-        return 0.0
-    med = clean.groupby("driver_number")["lap_duration"].median()
-    if driver_number not in med.index:
-        return 0.0
-    return max(0.0, float(med.loc[driver_number] - med.min()))
-
-
-def weekend_incident_risk(openf1: OpenF1Client, session: dict | None):
-    if not session:
-        return 0.30, "low"
-    try:
-        rc = openf1.race_control(session["session_key"])
-    except Exception:
-        return 0.30, "low"
-    messages = " ".join(str(x.get("message", "")) for x in rc).upper()
-    red = messages.count("RED FLAG")
-    yellow = messages.count("YELLOW")
-    sc = messages.count("SAFETY CAR")
-    score = min(0.70, 0.24 + 0.07 * red + 0.015 * yellow + 0.05 * sc)
-    return score, "medium"
-
-
-def grid_position(openf1: OpenF1Client, sessions: list[dict[str, Any]], driver_number: int):
-    races = [s for s in sessions if s.get("session_name") == "Race"]
-    if not races:
+    @staticmethod
+    def _match_driver(results: pd.DataFrame, selected_driver: str):
+        if results is None or len(results) == 0:
+            return None
+        target = selected_driver.strip().lower()
+        surname = target.split()[-1]
+        for _, row in results.iterrows():
+            full = str(row.get("FullName", "")).strip()
+            last = str(row.get("LastName", "")).strip()
+            if target == full.lower() or surname == last.lower() or surname in full.lower():
+                return {
+                    "abbreviation": str(row.get("Abbreviation", "")).strip(),
+                    "driver_number": str(row.get("DriverNumber", "")).strip(),
+                    "team_name": str(row.get("TeamName", "")).strip(),
+                    "full_name": full or selected_driver,
+                }
         return None
-    try:
-        grid = openf1.starting_grid(races[0]["session_key"])
-    except Exception:
-        return None
-    for row in grid:
-        if int(row.get("driver_number", -1)) == driver_number:
-            return int(row.get("position"))
-    return None
 
+    @staticmethod
+    def _clean_laps(laps: pd.DataFrame) -> pd.DataFrame:
+        if laps is None or laps.empty or "LapTime" not in laps:
+            return pd.DataFrame()
+        df = laps[laps["LapTime"].notna()].copy()
 
-def infer_tyre_inventory(stints: pd.DataFrame | None):
-    # OpenF1 does not expose the authoritative remaining-set list. We use current-weekend
-    # evidence only and clearly mark this output LOW confidence.
-    used = {"SOFT": 0, "MEDIUM": 0, "HARD": 0}
-    if stints is not None and not stints.empty:
-        for comp in used:
-            used[comp] = int((stints.get("compound", pd.Series(dtype=str)).astype(str).str.upper() == comp).sum() > 0)
-    return {
-        "SOFT": {"new": 1, "used": used["SOFT"]},
-        "MEDIUM": {"new": 1, "used": used["MEDIUM"]},
-        "HARD": {"new": 1, "used": used["HARD"]},
-    }
+        for col in ("PitOutTime", "PitInTime"):
+            if col in df:
+                df = df[df[col].isna()]
+        if "Deleted" in df:
+            df = df[~df["Deleted"].fillna(False)]
+        if "FastF1Generated" in df:
+            df = df[~df["FastF1Generated"].fillna(False)]
+        if "IsAccurate" in df:
+            accurate = df[df["IsAccurate"].fillna(False)]
+            if len(accurate) >= 5:
+                df = accurate
+        if "TrackStatus" in df:
+            green = df[df["TrackStatus"].astype(str).eq("1")]
+            if len(green) >= 5:
+                df = green
+        if "Compound" in df:
+            df = df[df["Compound"].astype(str).str.upper().isin(["SOFT", "MEDIUM", "HARD"])]
+
+        df["lap_seconds"] = df["LapTime"].dt.total_seconds()
+        if len(df) >= 8:
+            lo = df["lap_seconds"].quantile(0.03)
+            hi = df["lap_seconds"].quantile(0.95)
+            df = df[(df["lap_seconds"] >= lo) & (df["lap_seconds"] <= hi)]
+        return df
+
+    def _driver_laps(self, session, selected_driver: str):
+        match = self._match_driver(session.results, selected_driver)
+        if match is None or session.laps is None or session.laps.empty:
+            return pd.DataFrame(), match
+
+        laps = session.laps.copy()
+        if match["abbreviation"] and "Driver" in laps:
+            laps = laps[laps["Driver"].astype(str).eq(match["abbreviation"])]
+        elif match["driver_number"] and "DriverNumber" in laps:
+            laps = laps[laps["DriverNumber"].astype(str).eq(match["driver_number"])]
+        else:
+            laps = pd.DataFrame()
+
+        return self._clean_laps(laps), match
+
+    @staticmethod
+    def _degradation_dataset(clean_laps: pd.DataFrame, code: str):
+        needed = {"Compound", "TyreLife", "Stint", "lap_seconds"}
+        if clean_laps is None or clean_laps.empty or not needed.issubset(clean_laps.columns):
+            return pd.DataFrame()
+
+        df = clean_laps.dropna(subset=["Compound", "TyreLife", "Stint"]).copy()
+        df["compound"] = df["Compound"].astype(str).str.upper()
+        df["tyre_age"] = pd.to_numeric(df["TyreLife"], errors="coerce")
+        df["lap_duration"] = pd.to_numeric(df["lap_seconds"], errors="coerce")
+        df["stint_id"] = code + "-" + df["Stint"].astype(str)
+        df = df[df["compound"].isin(["SOFT", "MEDIUM", "HARD"])].dropna(
+            subset=["tyre_age", "lap_duration"]
+        )
+
+        counts = df.groupby("stint_id").size()
+        valid = counts[counts >= 4].index
+        return df[df["stint_id"].isin(valid)][
+            ["lap_duration", "tyre_age", "compound", "stint_id"]
+        ].copy()
+
+    @staticmethod
+    def _race_pace_delta(session, match):
+        if match is None or session.laps is None or session.laps.empty:
+            return 0.0
+        clean = FastF1DataClient._clean_laps(session.laps)
+        if clean.empty or "Driver" not in clean or "Compound" not in clean:
+            return 0.0
+
+        target = match["abbreviation"]
+        deltas, weights = [], []
+        for compound, cg in clean.groupby(clean["Compound"].astype(str).str.upper()):
+            if compound not in {"SOFT", "MEDIUM", "HARD"}:
+                continue
+            grouped = cg.groupby("Driver")["lap_seconds"].agg(["median", "count"])
+            grouped = grouped[grouped["count"] >= 4]
+            if target not in grouped.index or grouped.empty:
+                continue
+            ref = float(grouped["median"].min())
+            deltas.append(max(0.0, float(grouped.loc[target, "median"] - ref)))
+            weights.append(float(grouped.loc[target, "count"]))
+
+        return float(np.average(deltas, weights=weights)) if deltas else 0.0
+
+    @staticmethod
+    def _incident_prior(session):
+        try:
+            laps = session.laps
+            if laps is None or laps.empty or "TrackStatus" not in laps:
+                return 0.30, "low"
+            abnormal = (~laps["TrackStatus"].astype(str).eq("1")).mean()
+            return float(np.clip(0.24 + abnormal * 1.8, 0.22, 0.65)), "medium"
+        except Exception:
+            return 0.30, "low"
+
+    @staticmethod
+    def _inventory_evidence(driver_laps):
+        observed = {"SOFT": 0, "MEDIUM": 0, "HARD": 0}
+        for df in driver_laps:
+            if df is None or df.empty or "Compound" not in df:
+                continue
+            for comp in observed:
+                if (df["Compound"].astype(str).str.upper() == comp).any():
+                    observed[comp] = 1
+
+        # Deliberately permissive because this is not the official remaining-set list.
+        return {
+            "SOFT": {"new": 1, "used": observed["SOFT"], "confidence": "low"},
+            "MEDIUM": {"new": 2, "used": observed["MEDIUM"], "confidence": "low"},
+            "HARD": {"new": 2, "used": observed["HARD"], "confidence": "low"},
+        }
+
+    def _qualifying_position(self, year, round_number, selected_driver):
+        try:
+            session = self._load_session(year, round_number, "Q", load_laps=False)
+            match = self._match_driver(session.results, selected_driver)
+            if match is None:
+                return None, "low"
+            results = session.results
+            if "Abbreviation" not in results:
+                return None, "low"
+            row = results[results["Abbreviation"].astype(str).eq(match["abbreviation"])]
+            if row.empty:
+                return None, "low"
+            pos = row.iloc[0].get("Position")
+            if pd.notna(pos):
+                return int(float(pos)), "medium"
+        except Exception:
+            pass
+        return None, "low"
+
+    def analyse_weekend(self, year: int, round_number: int, selected_driver: str):
+        fallback = {
+            "available": False,
+            "source": "FastF1 fallback",
+            "practice_name": "No completed practice data",
+            "team_name": "",
+            "grid_position": None,
+            "grid_confidence": "low",
+            "degradation": {},
+            "degradation_confidence": "low",
+            "pace_delta": 0.0,
+            "pace_confidence": "low",
+            "incident_risk": 0.30,
+            "incident_confidence": "low",
+            "inventory": {
+                "SOFT": {"new": 1, "used": 1, "confidence": "low"},
+                "MEDIUM": {"new": 2, "used": 1, "confidence": "low"},
+                "HARD": {"new": 2, "used": 1, "confidence": "low"},
+            },
+            "practice_rows": 0,
+            "sessions_used": [],
+        }
+        if not self.available:
+            return fallback
+
+        sessions_used, datasets, driver_laps = [], [], []
+        best_session = best_match = None
+        best_pace = 0.0
+        best_count = -1
+
+        for code in ("FP2", "FP3", "FP1"):
+            try:
+                session = self._load_session(year, round_number, code, load_laps=True)
+                clean, match = self._driver_laps(session, selected_driver)
+                if match is None or clean.empty:
+                    continue
+
+                sessions_used.append(code)
+                driver_laps.append(clean)
+                ds = self._degradation_dataset(clean, code)
+                if not ds.empty:
+                    datasets.append(ds)
+
+                pace = self._race_pace_delta(session, match)
+                count = len(clean)
+                # Prefer FP2 for race pace, otherwise the richest available session.
+                score = count + (1000 if code == "FP2" else 0)
+                if score > best_count:
+                    best_count = score
+                    best_session, best_match, best_pace = session, match, pace
+            except Exception:
+                continue
+
+        if best_session is None:
+            return fallback
+
+        from strategy_engine import estimate_degradation_from_practice
+        merged = pd.concat(datasets, ignore_index=True) if datasets else pd.DataFrame()
+        degradation = estimate_degradation_from_practice(merged)
+        rows = len(merged)
+        grid, grid_conf = self._qualifying_position(year, round_number, selected_driver)
+        incident, incident_conf = self._incident_prior(best_session)
+
+        fallback.update({
+            "available": True,
+            "source": "FastF1 current weekend",
+            "practice_name": " + ".join(sessions_used),
+            "team_name": best_match.get("team_name", ""),
+            "grid_position": grid,
+            "grid_confidence": grid_conf,
+            "degradation": degradation,
+            "degradation_confidence": "high" if rows >= 16 else "medium" if rows >= 8 else "low",
+            "pace_delta": float(best_pace),
+            "pace_confidence": "medium",
+            "incident_risk": incident,
+            "incident_confidence": incident_conf,
+            "inventory": self._inventory_evidence(driver_laps),
+            "practice_rows": int(rows),
+            "sessions_used": sessions_used,
+        })
+        return fallback

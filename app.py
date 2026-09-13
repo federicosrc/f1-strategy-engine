@@ -8,18 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from official_sources import F1OfficialClient, PirelliCurrentSeason
-from data_sources import (
-    APIError,
-    OpenF1Client,
-    OpenMeteoClient,
-    grid_position,
-    infer_tyre_inventory,
-    practice_dataset,
-    race_pace_delta,
-    resolve_meeting,
-    select_practice_sessions,
-    weekend_incident_risk,
-)
+from data_sources import FastF1DataClient, OpenMeteoClient
 from strategy_engine import (
     CircuitProfile,
     DriverContext,
@@ -105,9 +94,9 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 @st.cache_resource
 def clients():
-    return F1OfficialClient(), PirelliCurrentSeason(), OpenF1Client(), OpenMeteoClient()
+    return F1OfficialClient(), PirelliCurrentSeason(), FastF1DataClient(), OpenMeteoClient()
 
-f1, pirelli, openf1, meteo = clients()
+f1, pirelli, fastf1_data, meteo = clients()
 CURRENT_YEAR = datetime.now(timezone.utc).year
 SIMULATION_RUNS = 30000
 
@@ -166,34 +155,12 @@ def source_row(name,source,confidence):
     return f'<div class="quality"><div><div class="qname">{name}</div><div class="qsource">{source}</div></div>{confidence_badge(confidence)}</div>'
 
 
-def load_driver_analysis(details, selected_driver):
-    meeting=resolve_meeting(openf1,details,CURRENT_YEAR)
-    sessions=openf1.sessions(meeting["meeting_key"])
-    practices=select_practice_sessions(sessions)
-    if not practices: raise APIError("No completed practice session available yet")
-    practice=practices[0]
-    session_drivers=openf1.drivers(practice["session_key"])
-    target=selected_driver.lower().strip(); driver_row=None
-    for d in session_drivers:
-        full=str(d.get("full_name","")).lower().strip(); broadcast=str(d.get("broadcast_name","")).lower().strip()
-        if target==full or target==broadcast or target.split()[-1] in full:
-            driver_row=d; break
-    if not driver_row: raise APIError("Selected driver not found in current weekend data")
-    driver_number=int(driver_row["driver_number"])
-    dataset,all_laps,raw_stints=practice_dataset(openf1,practice,driver_number)
-    if len(dataset)<5 and len(practices)>1:
-        for candidate in practices[1:]:
-            cd,cl,cs=practice_dataset(openf1,candidate,driver_number)
-            if len(cd)>len(dataset): practice,dataset,all_laps,raw_stints=candidate,cd,cl,cs
-            if len(dataset)>=5: break
-    degradation=estimate_degradation_from_practice(dataset)
-    return {
-        "meeting":meeting,"practice_name":practice.get("session_name","Practice"),"driver_number":driver_number,
-        "team_name":driver_row.get("team_name",""),"grid_position":grid_position(openf1,sessions,driver_number),
-        "degradation":degradation,"pace_delta":race_pace_delta(all_laps,driver_number),
-        "incident_risk":weekend_incident_risk(openf1,practice)[0],"inventory":infer_tyre_inventory(raw_stints),
-        "practice_rows":int(len(dataset)),
-    }
+def load_driver_analysis(event, selected_driver):
+    return fastf1_data.analyse_weekend(
+        CURRENT_YEAR,
+        int(event.get("round") or 1),
+        selected_driver,
+    )
 
 
 calendar=official_calendar(); drivers=official_drivers()
@@ -260,12 +227,13 @@ st.caption("2026 dry-race filter: at least two different dry specifications must
 
 # On action, refresh the selected driver's weekend data and run the requested strategy.
 if simulate_clicked or optimal_clicked:
-    with st.spinner(f"Loading current-weekend data for {selected_driver}…"):
+    with st.spinner(f"Analysing current-weekend data for {selected_driver}…"):
         try:
-            analysis_data=load_driver_analysis(details,selected_driver); st.session_state["analysis_data"]=analysis_data; st.session_state["analysis_key"]=analysis_key
-        except Exception as exc:
-            analysis_data=None; st.session_state["analysis_data"]=None; st.session_state["analysis_key"]=analysis_key
-            st.warning(f"Current-weekend data could not be fully loaded for {selected_driver}: {exc}. Conservative fallbacks will be used.")
+            analysis_data=load_driver_analysis(event,selected_driver)
+        except Exception:
+            analysis_data={"available":False,"degradation":{},"pace_delta":0.0,"inventory":inventory,"grid_position":None,"practice_rows":0,"practice_name":"Fallback"}
+        st.session_state["analysis_data"]=analysis_data
+        st.session_state["analysis_key"]=analysis_key
     grid=int((analysis_data or {}).get("grid_position") or 10); pace_delta=float((analysis_data or {}).get("pace_delta") or 0.0); incident=float((analysis_data or {}).get("incident_risk") or sc_prob); sc_prob=min(.75,max(.12,.55*sc_prob+.45*incident))
     deg=(analysis_data or {}).get("degradation",{}); soft_deg=float(deg.get("SOFT",soft_deg)); medium_deg=float(deg.get("MEDIUM",medium_deg)); hard_deg=float(deg.get("HARD",hard_deg)); inventory=(analysis_data or {}).get("inventory") or inventory
     tyres={"SOFT":TyreModel("SOFT",-.55,soft_deg),"MEDIUM":TyreModel("MEDIUM",0.0,medium_deg),"HARD":TyreModel("HARD",.45,hard_deg)}; undercut=min(.95,.48+overtaking*.35+max(0,medium_deg-.06)*.7)
@@ -277,14 +245,11 @@ if simulate_clicked or optimal_clicked:
         if simulate_clicked:
             st.error("Selected strategy is not feasible with the loaded data: "+" ".join(reasons)); st.session_state.pop("strategy_result",None); legal=[]
         if optimal_clicked and legal: anchor=legal[0]
-    if analysis_data is None:
-        st.session_state.pop("strategy_result", None)
-        st.session_state.pop("strategy_result_key", None)
-        st.error("Driver-specific current-weekend data are required for a race-outcome simulation. Please retry in a moment if OpenF1 was rate-limited.")
-    elif valid or (optimal_clicked and anchor):
+    if valid or (optimal_clicked and anchor):
         result=simulate_selected_strategy(final_inputs,anchor,compare_same_start=True)
         result_key=f"{analysis_key}:{'-'.join(selected_compounds)}:{simulations}"
-        st.session_state["strategy_result"]=result; st.session_state["strategy_result_key"]=result_key
+        st.session_state["strategy_result"]=result
+        st.session_state["strategy_result_key"]=result_key
 
 result=st.session_state.get("strategy_result"); result_key_now=f"{analysis_key}:{'-'.join(selected_compounds)}:{simulations}"
 if st.session_state.get("strategy_result_key")!=result_key_now: result=None
@@ -298,7 +263,7 @@ with st.expander("Low-confidence overrides",expanded=False):
         with col:
             x,y=st.columns(2); base=f"{analysis_key}:{comp}"; inventory[comp]["new"]=x.number_input(f"{comp[0]} new",0,5,int(inventory[comp].get("new",0)),key=base+":n"); inventory[comp]["used"]=y.number_input(f"{comp[0]} used",0,5,int(inventory[comp].get("used",0)),key=base+":u")
 
-st.markdown(f'''<div class="se-header"><div><div class="se-brand"><span>STRATEGY</span> ENGINE</div><div class="se-sub">Driver + tyre strategy simulator · current season</div></div><div class="se-headchips"><div class="se-chip"><div class="k">Grand Prix</div><div class="v">{details.get('name',event.get('name'))}</div></div><div class="se-chip"><div class="k">Driver</div><div class="v">{selected_driver}</div></div><div class="se-chip"><div class="k">Strategy</div><div class="v">{' → '.join(c[0] for c in selected_compounds)}</div></div><div class="se-chip"><div class="k">Model</div><div class="v">{'Driver-specific' if analysis_data else 'Awaiting simulation'}</div></div><div class="se-chip"><div class="k">Forecast</div><div class="v">{air_temp:.0f}°C · {rain_prob:.0%} rain</div></div></div></div>''',unsafe_allow_html=True)
+st.markdown(f'''<div class="se-header"><div><div class="se-brand"><span>STRATEGY</span> ENGINE</div><div class="se-sub">Driver + tyre strategy simulator · current season</div></div><div class="se-headchips"><div class="se-chip"><div class="k">Grand Prix</div><div class="v">{details.get('name',event.get('name'))}</div></div><div class="se-chip"><div class="k">Driver</div><div class="v">{selected_driver}</div></div><div class="se-chip"><div class="k">Strategy</div><div class="v">{' → '.join(c[0] for c in selected_compounds)}</div></div><div class="se-chip"><div class="k">Model</div><div class="v">{'FastF1 driver model' if (analysis_data or {}).get('available') else 'Fallback model' if analysis_data else 'Awaiting simulation'}</div></div><div class="se-chip"><div class="k">Forecast</div><div class="v">{air_temp:.0f}°C · {rain_prob:.0%} rain</div></div></div></div>''',unsafe_allow_html=True)
 
 circuit_col,weather_col,tyre_col=st.columns([1.15,1.0,1.0],gap="small")
 with circuit_col:
@@ -331,7 +296,7 @@ else:
             panel_title("Strategy comparison"); alts=pd.DataFrame(result["alternatives"]).head(7); fig=go.Figure(go.Bar(x=alts["strategy"],y=alts["expected_cost_s"],marker_color=["#ffd21f" if s==result["strategy"] else "#37e77b" if s==optimal["strategy"] else "#66727d" for s in alts["strategy"]],text=[f"{x:.1f}s" for x in alts["expected_cost_s"]],textposition="outside")); fig.update_layout(height=310,margin=dict(l=8,r=8,t=15,b=15),paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#dce2e8"),showlegend=False,yaxis=dict(title="Expected strategy cost",gridcolor="#202a33",zeroline=False)); st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False}); st.caption("Yellow = your strategy · Green = model optimum for the selected starting compound.")
     with scenario_col:
         with st.container(border=True):
-            panel_title("Race outcome"); metric_html([("Grid",f"P{grid}","driver-specific" if analysis_data else "fallback"),("Points",f'{result["points_probability"]:.0%}',"P10 or better"),("Outside points",f'{result["downside_probability"]:.0%}',"P11+"),("Optimality",f'{result["optimal_probability"]:.0%}',"vs legal alternatives")])
+            panel_title("Race outcome"); metric_html([("Grid",f"P{grid}","FastF1 / qualifying" if (analysis_data or {}).get("grid_position") else "fallback"),("Points",f'{result["points_probability"]:.0%}',"P10 or better"),("Outside points",f'{result["downside_probability"]:.0%}',"P11+"),("Optimality",f'{result["optimal_probability"]:.0%}',"vs legal alternatives")])
             for sc in sorted(scenario_probabilities(provisional_inputs),key=lambda x:x["probability"],reverse=True):
                 p=sc["probability"]; color="#37e77b" if "stable" in sc["scenario"].lower() else "#ffd21f" if "degradation" in sc["scenario"].lower() else "#ff1e2d" if "SC" in sc["scenario"] else "#39b8ff"; st.markdown(f'<div style="display:grid;grid-template-columns:1fr 44px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #1b252e"><div><b style="font-size:10px">{sc["scenario"]}</b><div class="barline" style="margin-top:4px"><div style="width:{p*100:.0f}%;background:{color}"></div></div></div><div style="font-weight:900">{p:.0%}</div></div>',unsafe_allow_html=True)
     dist_col,quality_col=st.columns([1.25,1.0],gap="small")
@@ -340,6 +305,6 @@ else:
             panel_title("Finish distribution"); ddf=pd.DataFrame([{"Position":f"P{k}","Probability":v*100} for k,v in result["finish_distribution"].items()]); fig2=go.Figure(go.Bar(x=ddf["Position"],y=ddf["Probability"],marker_color=["#37e77b" if int(p[1:])<=3 else "#ffd21f" if int(p[1:])<=5 else "#66727d" for p in ddf["Position"]])); fig2.update_layout(height=260,margin=dict(l=8,r=8,t=10,b=10),paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#dce2e8"),showlegend=False,yaxis=dict(title="Probability %",gridcolor="#202a33",zeroline=False)); st.plotly_chart(fig2,use_container_width=True,config={"displayModeBar":False})
     with quality_col:
         with st.container(border=True):
-            panel_title("Data quality & confidence"); rows=[("Circuit / distance","Formula 1 official","high" if details.get("circuit_length_km") and details.get("race_distance_km") else "medium"),("Weather","Open-Meteo","high" if weather else "low"),("Tyre nomination","Pirelli official",compound_info.get("confidence","pending")),("Driver grid","OpenF1 current weekend","high" if (analysis_data or {}).get("grid_position") else "low"),("Driver degradation",f'OpenF1 {(analysis_data or {}).get("practice_name","practice")}',"high" if (analysis_data or {}).get("practice_rows",0)>=10 else "medium" if analysis_data else "low"),("Remaining tyre sets","Inference / override","low"),("Dry strategy legality","2026 FIA sporting-rule logic","high")]; st.markdown("".join(source_row(*r) for r in rows),unsafe_allow_html=True)
+            panel_title("Data quality & confidence"); rows=[("Circuit / distance","Formula 1 official","high" if details.get("circuit_length_km") and details.get("race_distance_km") else "medium"),("Weather","Open-Meteo","high" if weather else "low"),("Tyre nomination","Pirelli official",compound_info.get("confidence","pending")),("Driver grid","FastF1 qualifying",(analysis_data or {}).get("grid_confidence","low")),("Driver degradation",f'FastF1 {(analysis_data or {}).get("practice_name","practice")}',(analysis_data or {}).get("degradation_confidence","low")),("Remaining tyre sets","Inference / override","low"),("Dry strategy legality","2026 FIA sporting-rule logic","high")]; st.markdown("".join(source_row(*r) for r in rows),unsafe_allow_html=True)
 
-st.caption("Strategy Engine V1.4.1 · Current season only · User-selected dry strategy · FIA legality filter · Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · OpenF1 driver/weekend analytics.")
+st.caption("Strategy Engine V1.4.1 · Current season only · User-selected dry strategy · FIA legality filter · Formula 1 official circuit data · Pirelli compounds · Open-Meteo weather · FastF1 driver/weekend analytics.")
