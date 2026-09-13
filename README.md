@@ -1,61 +1,56 @@
-# F1 Strategy Engine — V1.3
+# F1 Strategy Engine — V1.4
 
-Current-season Formula 1 pre-race strategy dashboard built with Streamlit.
+V1.4 changes the application from a passive strategy predictor into a user-driven race strategy simulator.
 
-## V1.3 changes
+## Workflow
 
-- Race setup moved from the left sidebar to a horizontal control bar.
-- Driver-specific recalculation fixed: after the first **Run / refresh strategy**, changing GP or driver automatically rebuilds the selected driver's model.
-- OpenF1 session payloads remain cached, so switching drivers normally reuses the same downloaded FP laps/stints.
-- Tyre-set overrides are scoped by GP + driver and no longer leak from one driver to another.
-- Team-choice probabilities now react to grid position / track-position value as well as driver-specific degradation and tyre availability.
-- Formula1.com circuit parsing is more robust against client-rendered/embedded JSON.
-- Circuit length and race distance use dedicated dashboard cards, preventing Streamlit metric truncation.
-- If Formula1.com temporarily omits one distance field, V1.3 shows a clearly-marked derived fallback instead of a blank card.
-- The current-season fallback calendar was aligned to the official 24-round 2026 Formula 1 calendar. No previous-season circuit database is bundled.
+1. Choose the current-season Grand Prix.
+2. Choose the driver.
+3. Choose the starting tyre.
+4. Choose 1 or 2 pit stops.
+5. Choose the following tyre compounds.
+6. Press **Simulate my strategy**.
 
-## Data hierarchy
+The dashboard returns:
+- expected finish
+- most likely finish
+- win / podium / top-5 probabilities
+- automatically optimised pit windows
+- strategy cost versus the model optimum
+- finish-position distribution
+- scenario probabilities
 
-1. **Formula 1 official** — current-season calendar, circuit page, laps, circuit length, race distance, track image.
-2. **Pirelli official** — current-season dry compound nominations where published.
-3. **Open-Meteo** — race-time weather forecast and asphalt-temperature estimate.
-4. **OpenF1** — current-weekend grid, practice laps, stints, race control and driver-specific analytics.
-5. **Model prior / override** — only where no sufficiently reliable automatic source exists.
+## Regulation filter
 
-## How driver switching works
+For a planned dry race the app enforces:
+- at least two different dry tyre specifications;
+- at least one mandatory Race tyre specification;
+- enough tyre sets for the chosen sequence.
 
-The app deliberately avoids heavy OpenF1 calls before you ask for them.
+If Intermediate or Wet tyres are used during the actual race, the dry two-specification requirement no longer applies.
 
-1. Select GP and driver.
-2. Press **Run / refresh strategy** once.
-3. Current-weekend data are loaded and cached.
-4. From then on, changing driver or GP triggers the relevant recalculation automatically.
+## Data sources
 
-The header shows **Driver-specific** when current-weekend driver data are active and **Baseline** when the dashboard is still using strategic priors.
+- Formula 1 official: current-season calendar and circuit data
+- Pirelli: current-season compound nominations
+- Open-Meteo: race weather forecast
+- OpenF1: current-weekend driver grid, practice laps, stints and degradation inputs
 
-## Run locally
+## Important limitation
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
-```
+Remaining tyre sets are still the weakest automatic variable in V1.4. The app keeps this value overrideable.
 
-## Deploy
+## Update the existing GitHub repository
 
-Replace the same files in your GitHub repository and commit them. Streamlit Community Cloud should rebuild the application automatically.
-
-Files to replace/add:
-
+Replace:
 - `app.py`
+- `strategy_engine.py`
+- `README.md`
+
+Keep:
 - `data_sources.py`
 - `official_sources.py`
-- `strategy_engine.py`
 - `requirements.txt`
-- `README.md`
 - `.streamlit/config.toml`
 
-## Known limitation
-
-The authoritative list of tyre sets remaining for each driver is still treated as low confidence because it is not currently supplied by the OpenF1 endpoints used by the app. It remains manually overrideable.
+Streamlit Community Cloud should redeploy automatically after the commit.
