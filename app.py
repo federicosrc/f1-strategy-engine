@@ -9,7 +9,7 @@ import streamlit as st
 
 from official_sources import F1OfficialClient, PirelliCurrentSeason
 from data_sources import FastF1DataClient, OpenMeteoClient
-from strategy_engine_v18 import (
+from strategy_engine_v19 import (
     CircuitProfile,
     DriverContext,
     SimulationInputs,
@@ -308,6 +308,7 @@ def load_driver_analysis(event, selected_driver):
 
 
 
+
 calendar=official_calendar(); drivers=official_drivers()
 if not calendar or not drivers:
     st.error("Current Formula 1 calendar or driver list could not be loaded.")
@@ -318,14 +319,15 @@ default_driver_idx=drivers.index("Charles Leclerc") if "Charles Leclerc" in driv
 
 st.markdown(
     '<div class="setup-title">Race scenario setup'
-    '<span class="setup-sub">Choose the race assumptions you want to test. Every selection below changes the simulation.</span>'
+    '<span class="setup-sub">Choose the race conditions and strategy assumptions you want to simulate.</span>'
     '</div>',
     unsafe_allow_html=True,
 )
 
-# GP | Driver | Start | Stops | Stint 2 | Stint 3 | Weather | Neutralisation | Pit 1 | Pit 2
+# Weather comes before tyre choice so the tyre menus can react to the selected conditions.
+# GP | Driver | Weather | Start | Stops | Stint 2 | Stint 3 | Race control | Pit 1 | Pit 2
 input_cols=st.columns(
-    [1.72,1.38,.65,.56,.66,.66,1.05,1.00,.60,.60],
+    [1.62,1.28,1.05,.66,.53,.66,.66,.95,.58,.58],
     gap="small",
     vertical_alignment="bottom",
 )
@@ -344,24 +346,24 @@ race_laps=int(details.get("number_of_laps") or 57)
 
 with input_cols[1]:
     selected_driver=st.selectbox("Driver",drivers,index=default_driver_idx)
-with input_cols[2]:
-    start_compound=st.selectbox("Start tyre",["SOFT","MEDIUM","HARD"],index=1)
-with input_cols[3]:
-    stops=st.selectbox("Stops",[1,2],index=0)
 
-with input_cols[6]:
+with input_cols[2]:
     weather_mode=st.selectbox(
-        "Weather",
-        ["FORECAST","DRY","HOT_DRY","COOL_DRY","CHANGEABLE","RAIN_LIKELY"],
+        "Weather scenario",
+        ["EXPECTED","DRY","HOT_DRY","COOL_DRY","CHANGEABLE","RAIN","HEAVY_RAIN"],
         format_func=lambda x:{
-            "FORECAST":"Forecast",
+            "EXPECTED":"Expected conditions",
             "DRY":"Dry",
             "HOT_DRY":"Hot & dry",
             "COOL_DRY":"Cool & dry",
             "CHANGEABLE":"Changeable",
-            "RAIN_LIKELY":"Rain likely",
+            "RAIN":"Rain",
+            "HEAVY_RAIN":"Heavy rain",
         }[x],
     )
+
+with input_cols[4]:
+    stops=st.selectbox("Stops",[1,2],index=0)
 
 with input_cols[7]:
     neutralisation_mode=st.selectbox(
@@ -386,65 +388,97 @@ try:
         details.get("location",event.get("location","")),
         details.get("country",event.get("country","")),
     )
-    forecast_weather=meteo.forecast_at(geo["latitude"],geo["longitude"],race_dt)
+    expected_weather=meteo.forecast_at(geo["latitude"],geo["longitude"],race_dt)
 except Exception:
-    forecast_weather={}
+    expected_weather={}
 
-forecast_air=float(forecast_weather.get("temperature_2m",25.0))
-forecast_track=float(forecast_weather.get("track_temperature_estimate",forecast_air+15.0))
-forecast_rain=float(forecast_weather.get("precipitation_probability",5.0) or 0)/100.0
-forecast_wind=float(forecast_weather.get("wind_speed_10m",0.0) or 0)
-forecast_humidity=float(forecast_weather.get("relative_humidity_2m",55.0) or 55.0)
+expected_air=float(expected_weather.get("temperature_2m",25.0))
+expected_track=float(expected_weather.get("track_temperature_estimate",expected_air+15.0))
+expected_rain=float(expected_weather.get("precipitation_probability",5.0) or 0)/100.0
+expected_wind=float(expected_weather.get("wind_speed_10m",0.0) or 0)
+expected_humidity=float(expected_weather.get("relative_humidity_2m",55.0) or 55.0)
 
-# Scenario override: forecast remains the baseline, then the user can stress-test realistic conditions.
-if weather_mode=="FORECAST":
-    air_temp=forecast_air
-    track_temp=forecast_track
-    rain_prob=forecast_rain
-    wind=forecast_wind
-    humidity=forecast_humidity
-    weather_label="Forecast"
-    weather_source="Open-Meteo race-time forecast"
+if weather_mode=="EXPECTED":
+    air_temp=expected_air
+    track_temp=expected_track
+    rain_prob=expected_rain
+    wind=expected_wind
+    humidity=expected_humidity
+    weather_label="Expected conditions"
+    weather_source="Open-Meteo race-time outlook"
 elif weather_mode=="DRY":
-    air_temp=forecast_air
-    track_temp=forecast_track
+    air_temp=expected_air
+    track_temp=expected_track
     rain_prob=0.0
-    wind=forecast_wind
-    humidity=min(forecast_humidity,55.0)
+    wind=expected_wind
+    humidity=min(expected_humidity,55.0)
     weather_label="Dry"
-    weather_source="User scenario · forecast temperatures"
+    weather_source="User scenario · expected temperatures"
 elif weather_mode=="HOT_DRY":
-    air_temp=max(32.0,forecast_air+4.0)
-    track_temp=max(48.0,forecast_track+8.0)
+    air_temp=max(32.0,expected_air+4.0)
+    track_temp=max(48.0,expected_track+8.0)
     rain_prob=0.0
-    wind=max(2.0,forecast_wind)
-    humidity=min(45.0,forecast_humidity)
+    wind=max(2.0,expected_wind)
+    humidity=min(45.0,expected_humidity)
     weather_label="Hot & dry"
-    weather_source="User stress scenario"
+    weather_source="User scenario · high thermal stress"
 elif weather_mode=="COOL_DRY":
-    air_temp=min(20.0,forecast_air-4.0)
-    track_temp=min(30.0,forecast_track-8.0)
+    air_temp=min(20.0,expected_air-4.0)
+    track_temp=min(30.0,expected_track-8.0)
     rain_prob=0.0
-    wind=forecast_wind
-    humidity=max(50.0,forecast_humidity)
+    wind=expected_wind
+    humidity=max(50.0,expected_humidity)
     weather_label="Cool & dry"
-    weather_source="User stress scenario"
+    weather_source="User scenario · low track temperature"
 elif weather_mode=="CHANGEABLE":
-    air_temp=min(forecast_air,24.0)
-    track_temp=min(forecast_track,34.0)
+    air_temp=min(expected_air,24.0)
+    track_temp=min(expected_track,34.0)
     rain_prob=0.45
-    wind=max(forecast_wind,10.0)
-    humidity=max(forecast_humidity,70.0)
+    wind=max(expected_wind,10.0)
+    humidity=max(expected_humidity,70.0)
     weather_label="Changeable"
     weather_source="User scenario · intermittent rain risk"
+elif weather_mode=="RAIN":
+    air_temp=min(expected_air,21.0)
+    track_temp=min(expected_track,27.0)
+    rain_prob=0.90
+    wind=max(expected_wind,12.0)
+    humidity=max(expected_humidity,85.0)
+    weather_label="Rain"
+    weather_source="User scenario · wet track"
 else:
-    air_temp=min(forecast_air,22.0)
-    track_temp=min(forecast_track,28.0)
-    rain_prob=0.80
-    wind=max(forecast_wind,12.0)
-    humidity=max(forecast_humidity,80.0)
-    weather_label="Rain likely"
-    weather_source="User scenario · high rain probability"
+    air_temp=min(expected_air,19.0)
+    track_temp=min(expected_track,24.0)
+    rain_prob=0.98
+    wind=max(expected_wind,15.0)
+    humidity=max(expected_humidity,92.0)
+    weather_label="Heavy rain"
+    weather_source="User scenario · very wet track"
+
+# Wet-weather tyres become available whenever wet conditions are a realistic part of the scenario.
+wet_tyres_enabled=(
+    weather_mode in {"CHANGEABLE","RAIN","HEAVY_RAIN"}
+    or (weather_mode=="EXPECTED" and expected_rain>=0.20)
+)
+available_compounds=["SOFT","MEDIUM","HARD"]
+if wet_tyres_enabled:
+    available_compounds += ["INTERMEDIATE","WET"]
+
+default_start = (
+    "WET" if weather_mode=="HEAVY_RAIN"
+    else "INTERMEDIATE" if weather_mode=="RAIN"
+    else "MEDIUM"
+)
+if default_start not in available_compounds:
+    default_start="MEDIUM"
+
+with input_cols[3]:
+    start_compound=st.selectbox(
+        "Start tyre",
+        available_compounds,
+        index=available_compounds.index(default_start),
+        key=f"start:{event['key']}:{selected_driver}:{weather_mode}",
+    )
 
 circuit_type=details.get("circuit_type","Permanent")
 
@@ -471,10 +505,16 @@ inventory=(analysis_data or {}).get("inventory") or {
     "MEDIUM":{"new":1,"used":1},
     "HARD":{"new":1,"used":1},
 }
+# Wet-weather allocations are kept permissive until an authoritative remaining-set source is integrated.
+inventory.setdefault("INTERMEDIATE",{"new":4,"used":0})
+inventory.setdefault("WET",{"new":3,"used":0})
+
 tyres={
     "SOFT":TyreModel("SOFT",-.55,soft_deg),
     "MEDIUM":TyreModel("MEDIUM",0.0,medium_deg),
     "HARD":TyreModel("HARD",.45,hard_deg),
+    "INTERMEDIATE":TyreModel("INTERMEDIATE",.05,.035),
+    "WET":TyreModel("WET",.25,.022),
 }
 
 provisional_inputs=SimulationInputs(
@@ -484,31 +524,37 @@ provisional_inputs=SimulationInputs(
     mandatory_race_compounds=("HARD","MEDIUM"),
     rivals=(analysis_data or {}).get("grid_model") or None,
     neutralisation_mode=neutralisation_mode,
+    allowed_compounds=tuple(available_compounds),
+    weather_mode=weather_mode,
 )
 
 s2_options=legal_next_compounds(
     [start_compound],stops+1,provisional_inputs
-) or [c for c in ("SOFT","MEDIUM","HARD") if total_sets(inventory,c)>0]
+) or available_compounds
 
-with input_cols[4]:
+with input_cols[5]:
     stint2=st.selectbox(
-        "Stint 2",s2_options,key=f"s2:{analysis_key}:{start_compound}:{stops}"
+        "Stint 2",
+        s2_options,
+        key=f"s2:{analysis_key}:{weather_mode}:{start_compound}:{stops}",
     )
 
 if stops==2:
     s3_options=legal_next_compounds(
         [start_compound,stint2],3,provisional_inputs
-    ) or [c for c in ("SOFT","MEDIUM","HARD") if total_sets(inventory,c)>0]
-    with input_cols[5]:
+    ) or available_compounds
+    with input_cols[6]:
         stint3=st.selectbox(
-            "Stint 3",s3_options,key=f"s3:{analysis_key}:{start_compound}:{stint2}"
+            "Stint 3",
+            s3_options,
+            key=f"s3:{analysis_key}:{weather_mode}:{start_compound}:{stint2}",
         )
 else:
     stint3=None
-    with input_cols[5]:
+    with input_cols[6]:
         st.selectbox(
             "Stint 3",["—"],index=0,disabled=True,
-            key=f"s3-disabled:{analysis_key}:{start_compound}:{stops}",
+            key=f"s3-disabled:{analysis_key}:{weather_mode}:{start_compound}:{stops}",
         )
 
 pit1_max=max(4,race_laps-6 if stops==2 else race_laps-2)
@@ -550,10 +596,12 @@ with button_cols[2]:
     optimal_clicked=st.button("Find optimal strategy",use_container_width=True)
 
 valid_now,rule_reasons=validate_strategy(selected_compounds,provisional_inputs)
+short_name={"SOFT":"S","MEDIUM":"M","HARD":"H","INTERMEDIATE":"I","WET":"W"}
 pills='<span class="strategy-arrow">→</span>'.join(
-    f'<span class="strategy-pill">{c[0]}</span>' for c in selected_compounds
+    f'<span class="strategy-pill">{short_name.get(c,c[0])}</span>' for c in selected_compounds
 )
 neutral_label={"NONE":"NO SC/VSC","SC":"SAFETY CAR","VSC":"VIRTUAL SAFETY CAR"}[neutralisation_mode]
+wet_used=any(c in {"INTERMEDIATE","WET"} for c in selected_compounds)
 
 st.markdown(
     f'<div class="strategy-strip">'
@@ -562,10 +610,21 @@ st.markdown(
     f'<span style="color:#8d9aa7;font-size:10px;font-weight:800">'
     f'PIT {" / ".join("L"+str(x) for x in selected_pit_laps)} · {weather_label.upper()} · {neutral_label}</span>'
     f'<span class="{"rule-ok" if valid_now else "rule-bad"}">'
-    f'{"LEGAL DRY STRATEGY" if valid_now else "CHECK STRATEGY"}</span>'
+    f'{"LEGAL STRATEGY" if valid_now else "CHECK STRATEGY"}</span>'
     f'</div>',
     unsafe_allow_html=True,
 )
+
+if wet_used:
+    st.caption(
+        "Intermediate/Wet selected: the dry-race requirement to use two different slick specifications "
+        "is not applied. Tyre suitability is evaluated against the selected rain scenario."
+    )
+else:
+    st.caption(
+        "Dry-tyre strategy: at least two different dry specifications must be used and the plan must "
+        "include a mandatory Race specification."
+    )
 
 if simulate_clicked or optimal_clicked:
     with st.spinner(f"Analysing current-weekend data for {selected_driver}…"):
@@ -589,11 +648,17 @@ if simulate_clicked or optimal_clicked:
     soft_deg=float(deg.get("SOFT",soft_deg))
     medium_deg=float(deg.get("MEDIUM",medium_deg))
     hard_deg=float(deg.get("HARD",hard_deg))
-    inventory=(analysis_data or {}).get("inventory") or inventory
+    loaded_inventory=(analysis_data or {}).get("inventory") or inventory
+    inventory.update(loaded_inventory)
+    inventory.setdefault("INTERMEDIATE",{"new":4,"used":0})
+    inventory.setdefault("WET",{"new":3,"used":0})
+
     tyres={
         "SOFT":TyreModel("SOFT",-.55,soft_deg),
         "MEDIUM":TyreModel("MEDIUM",0.0,medium_deg),
         "HARD":TyreModel("HARD",.45,hard_deg),
+        "INTERMEDIATE":TyreModel("INTERMEDIATE",.05,.035),
+        "WET":TyreModel("WET",.25,.022),
     }
     undercut=min(.95,.48+overtaking*.35+max(0,medium_deg-.06)*.7)
 
@@ -604,6 +669,8 @@ if simulate_clicked or optimal_clicked:
         mandatory_race_compounds=("HARD","MEDIUM"),
         rivals=(analysis_data or {}).get("grid_model") or None,
         neutralisation_mode=neutralisation_mode,
+        allowed_compounds=tuple(available_compounds),
+        weather_mode=weather_mode,
     )
 
     valid,reasons=validate_strategy(selected_compounds,final_inputs)
@@ -646,7 +713,6 @@ result_key_now=(
 if st.session_state.get("strategy_result_key")!=result_key_now:
     result=None
 
-# Canonical projected position = the same position used in the final-classification table.
 if result is not None:
     projected_position=int(
         result.get("projected_finish_position")
@@ -678,22 +744,25 @@ if result is not None:
     st.markdown(projection_html,unsafe_allow_html=True)
 
 with st.expander("Low-confidence overrides",expanded=False):
-    st.caption("Correct pit-lane loss or remaining tyre sets if you have better official data.")
-    cols=st.columns(4,gap="small")
+    st.caption("Correct pit-lane loss or tyre availability if you have better official data.")
+    cols=st.columns(6,gap="small")
     with cols[0]:
         pit_loss=st.number_input(
-            "Pit lane loss (s)",10.0,40.0,float(pit_loss),0.1,
-            key=f"{event['key']}:pit",
+            "Pit loss (s)",10.0,40.0,float(pit_loss),0.1,key=f"{event['key']}:pit"
         )
-    for comp,col in zip(("SOFT","MEDIUM","HARD"),cols[1:]):
+    for comp,col in zip(
+        ("SOFT","MEDIUM","HARD","INTERMEDIATE","WET"),
+        cols[1:],
+    ):
         with col:
+            st.markdown(f"**{comp.title()}**")
             x,y=st.columns(2)
             base=f"{analysis_key}:{comp}"
             inventory[comp]["new"]=x.number_input(
-                f"{comp[0]} new",0,5,int(inventory[comp].get("new",0)),key=base+":n"
+                "N",0,6,int(inventory[comp].get("new",0)),key=base+":n"
             )
             inventory[comp]["used"]=y.number_input(
-                f"{comp[0]} used",0,5,int(inventory[comp].get("used",0)),key=base+":u"
+                "U",0,6,int(inventory[comp].get("used",0)),key=base+":u"
             )
 
 st.markdown(
@@ -705,7 +774,7 @@ st.markdown(
       <div class="se-headchips">
         <div class="se-chip"><div class="k">Grand Prix</div><div class="v">{details.get('name',event.get('name'))}</div></div>
         <div class="se-chip"><div class="k">Driver</div><div class="v">{selected_driver}</div></div>
-        <div class="se-chip"><div class="k">Strategy</div><div class="v">{' → '.join(c[0] for c in selected_compounds)}</div></div>
+        <div class="se-chip"><div class="k">Strategy</div><div class="v">{' → '.join(short_name.get(c,c[0]) for c in selected_compounds)}</div></div>
         <div class="se-chip"><div class="k">Weather</div><div class="v">{weather_label}</div></div>
         <div class="se-chip"><div class="k">Race control</div><div class="v">{neutral_label}</div></div>
       </div>
@@ -764,7 +833,7 @@ with left_col:
 with right_col:
     with st.container(border=True):
         panel_title("Your strategy")
-        strategy_sequence=" → ".join(c[0] for c in selected_compounds)
+        strategy_sequence=" → ".join(short_name.get(c,c[0]) for c in selected_compounds)
         pit_text=" / ".join(f"L{x}" for x in selected_pit_laps)
 
         st.markdown(
@@ -781,6 +850,12 @@ with right_col:
             unsafe_allow_html=True,
         )
 
+        st.caption(
+            f'Slick nomination: Hard {compound_info["hard"]} · Medium {compound_info["medium"]} · '
+            f'Soft {compound_info["soft"]}'
+            + (" · Intermediate/Wet enabled" if wet_tyres_enabled else "")
+        )
+
         if result is not None:
             metric_html([
                 ("Grid",f"P{grid}","FastF1 / qualifying" if (analysis_data or {}).get("grid_position") else "fallback"),
@@ -789,7 +864,6 @@ with right_col:
                 ("Strategy cost",f'{result["expected_cost_s"]:.1f}s',"lower is better"),
             ])
 
-            # Requested placement: distribution directly below Your Strategy.
             panel_title("Finish-position distribution")
             ddf=pd.DataFrame([
                 {"Position":f"P{k}","Probability":v*100}
@@ -818,15 +892,13 @@ with right_col:
                 yaxis=dict(title="Probability %",gridcolor="#202a33",zeroline=False),
                 xaxis=dict(title=""),
             )
-            st.plotly_chart(
-                fig2,use_container_width=True,config={"displayModeBar":False},
-            )
+            st.plotly_chart(fig2,use_container_width=True,config={"displayModeBar":False})
 
 if result is None:
     with st.container(border=True):
         panel_title("Strategy simulation")
         st.info(
-            f"Selected {' → '.join(c[0] for c in selected_compounds)} for {selected_driver}, "
+            f"Selected {' → '.join(short_name.get(c,c[0]) for c in selected_compounds)} for {selected_driver}, "
             f"pit {' / '.join('L'+str(x) for x in selected_pit_laps)}, {weather_label}, {neutral_label}. "
             "Press SIMULATE MY STRATEGY to calculate the race outcome."
         )
@@ -865,21 +937,18 @@ else:
     with scenario_col:
         with st.container(border=True):
             panel_title("Scenario assumptions")
+            tyre_mode="Slick + Intermediate + Wet" if wet_tyres_enabled else "Slick only"
             st.markdown(
                 f"""
                 **Weather:** {weather_label}  
                 **Rain probability:** {rain_prob:.0%}  
                 **Track temperature:** {track_temp:.0f}°C  
+                **Available tyres:** {tyre_mode}  
                 **Race control:** {neutral_label}  
                 **Pit laps:** {' / '.join('L'+str(x) for x in selected_pit_laps)}
                 """
             )
-            st.caption(
-                "Weather and race-control assumptions are shared across each simulated race, "
-                "so every driver in that Monte Carlo run experiences the same scenario."
-            )
 
-    # Full-width estimated final classification.
     with st.container(border=True):
         panel_title("Estimated final classification")
         standings=result.get("estimated_classification",[])
@@ -912,12 +981,8 @@ else:
             '</div>',
             unsafe_allow_html=True,
         )
-        st.caption(
-            "This is the canonical projected classification. The large Estimated Final Position above "
-            "uses the selected driver's position in this same table."
-        )
 
 st.caption(
-    "Strategy Engine V1.8 · Race-scenario simulator · Shared weather/race-control assumptions · "
-    "Full-grid Monte Carlo classification."
+    "Strategy Engine V1.9 · Dry / changeable / rain / heavy-rain scenarios · "
+    "Slick, Intermediate and Wet tyre strategy simulation."
 )

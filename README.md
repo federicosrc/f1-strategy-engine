@@ -1,52 +1,51 @@
-# F1 Strategy Engine — V1.8
+# F1 Strategy Engine — V1.9
 
-V1.8 turns the app further toward a realistic race-scenario simulator.
+## Weather labels
+`Forecast` has been replaced by **Expected conditions**.
 
-## Main changes
-
-### One canonical finishing position
-The large Estimated Final Position and the Estimated Final Classification now use the same ranking method.
-
-The classification is ordered by average Monte Carlo finishing position. The selected driver's row in that table becomes the canonical projected finishing position displayed at the top.
-
-The modal finishing position is retained internally for distribution analysis, but it is no longer shown as a conflicting headline result.
-
-### Weather is now a scenario input
-The top setup row includes:
-- Forecast
+Available scenarios:
+- Expected conditions
 - Dry
 - Hot & dry
 - Cool & dry
 - Changeable
-- Rain likely
+- Rain
+- Heavy rain
 
-The selection dynamically changes:
-- air temperature
-- estimated track temperature
-- rain probability
-- humidity / wind assumptions
-- tyre thermal degradation through track temperature
-- Monte Carlo rain occurrence
+## Wet-weather tyres
+When wet weather is plausible, the tyre menus also show:
+- INTERMEDIATE
+- WET
 
-Forecast uses Open-Meteo. Other options are deliberate stress-test scenarios around the forecast baseline.
+They are enabled for Changeable, Rain and Heavy rain scenarios, and also for Expected conditions when the race-time rain probability is at least 20%.
 
-### Shared race scenario
-Rain occurrence and race-control assumptions are shared across the field within each Monte Carlo race. The selected driver and all rivals therefore experience the same weather realization.
+## Regulation logic
+If a strategy uses Intermediate or Wet tyres, the dry-race requirement to use two different slick specifications is not enforced.
 
-### Layout
-- A clear `Race Scenario Setup` title appears above the input menus.
-- `Weather & Track` remains under the circuit and reacts to the weather input.
-- `Finish-position distribution` is directly below `Your Strategy`.
-- The estimated final classification is full width below the strategy analysis.
+If the strategy uses slicks only, the normal dry tyre rule remains active.
+
+## Performance logic
+Intermediate and Wet are not cosmetic menu options.
+
+The model applies condition-dependent pace penalties:
+- Intermediate is strongly penalised on a dry track and favoured in normal rain.
+- Wet is heavily penalised on a dry track and favoured in heavy rain.
+- Slicks receive large penalties when a simulated race is wet.
+
+This lets the engine compare plans such as:
+- M → I
+- I → W
+- I → I
+- W → I
+- M → I → M
 
 ## GitHub update
-
 Replace:
 - `app.py`
 - `data_sources.py`
 - `README.md`
 
 Add:
-- `strategy_engine_v18.py`
+- `strategy_engine_v19.py`
 
-You may leave `strategy_engine_v17.py` in the repository; V1.8 no longer imports it.
+V1.9 imports `strategy_engine_v19.py`, so the older v18/v17 engine files can remain in the repository without being used.
