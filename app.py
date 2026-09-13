@@ -651,6 +651,66 @@ def official_event(event_key: str, event_payload: dict):
 def official_drivers():
     return F1OfficialClient().drivers()
 
+@st.cache_data(ttl=21600, show_spinner=False)
+def official_driver_standings():
+    return F1OfficialClient().driver_standings(CURRENT_YEAR)
+
+
+def target_driver_prior_from_standings(target_analysis, selected_driver: str, event_key: str):
+    """Inject a driver-specific prior only when weekend/FastF1 evidence is unavailable."""
+    context = str((target_analysis or {}).get("target_context") or "generic_fallback")
+    if context != "generic_fallback":
+        return target_analysis
+
+    standings = official_driver_standings()
+    if not standings:
+        return target_analysis
+
+    grid_rows = F1OfficialClient().event_grid_prior(event_key, standings)
+    if not grid_rows:
+        return target_analysis
+
+    max_points = max(float(r.get("points") or 0.0) for r in grid_rows) or 1.0
+    grid_model = []
+    selected = None
+    for row in grid_rows:
+        rank = int(row.get("position") or row.get("grid_position") or 22)
+        points = float(row.get("points") or 0.0)
+        deficit = max(0.0, 1.0 - points / max_points)
+        # Season-strength prior: enough spread to preserve genuine driver/team differences
+        # without pretending championship points are literal lap-time measurements.
+        pace_delta = float(min(1.65, 0.48 * deficit + 0.012 * max(0, rank - 1)))
+        item = {
+            "driver_name": str(row.get("driver") or ""),
+            "abbreviation": "",
+            "team_name": str(row.get("team") or ""),
+            "grid_position": int(row.get("grid_position") or rank),
+            "race_pace_delta": pace_delta,
+            "pace_confidence": "low",
+            "grid_confidence": "medium" if event_key == "spain" and str(row.get("driver")) in {"Lando Norris","Kimi Antonelli","Max Verstappen","Lewis Hamilton","Charles Leclerc","George Russell","Oscar Piastri","Liam Lawson","Franco Colapinto","Arvid Lindblad"} else "low",
+        }
+        grid_model.append(item)
+        if item["driver_name"].strip().lower() == selected_driver.strip().lower():
+            selected = item
+
+    if selected is None:
+        return target_analysis
+
+    out = dict(target_analysis or {})
+    out.update({
+        "available": True,
+        "practice_name": "Current-season strength prior",
+        "team_name": selected["team_name"],
+        "grid_position": selected["grid_position"],
+        "grid_confidence": selected["grid_confidence"],
+        "pace_delta": selected["race_pace_delta"],
+        "pace_confidence": "low",
+        "grid_model": grid_model,
+        "grid_model_confidence": "low",
+        "target_context": "official_standings_prior",
+    })
+    return out
+
 
 def parse_race_datetime(details):
     txt = details.get("race_schedule_text")
@@ -794,14 +854,20 @@ if app_mode=="TARGET OUTCOME":
     with target_cols[3]:
         target_run=st.button("🎯 Find path",use_container_width=True,type="primary")
 
-    target_key=f'{CURRENT_YEAR}:{event["key"]}:{target_driver}:{target_goal}'
+    target_key=f'target-v3:{CURRENT_YEAR}:{event["key"]}:{target_driver}:{target_goal}'
 
     if target_run:
         with st.spinner(f"Searching realistic paths to {target_goal} for {target_driver}…"):
             try:
                 target_analysis=fastf1_data.analyse_target_context(CURRENT_YEAR, int(event.get("round") or 1), target_driver)
             except Exception:
-                target_analysis={"available":False,"degradation":{},"pace_delta":0.0,"inventory":{},"grid_position":None,"grid_model":[]}
+                target_analysis={"available":False,"degradation":{},"pace_delta":0.0,"inventory":{},"grid_position":None,"grid_model":[],"target_context":"generic_fallback"}
+
+            target_analysis=target_driver_prior_from_standings(target_analysis,target_driver,event["key"])
+            if str((target_analysis or {}).get("target_context")) == "generic_fallback":
+                st.error("Driver-specific performance context is unavailable. Target Outcome will not use a generic identical-driver fallback. Try again when current-season data are reachable.")
+                st.session_state.pop("target_result",None)
+                st.stop()
 
             target_race_dt=parse_race_datetime(details)
             try:
@@ -902,7 +968,7 @@ if app_mode=="TARGET OUTCOME":
         )
 
         baseline_context=(target_analysis or {}).get("target_context","current_weekend") if "target_analysis" in locals() else "cached"
-        baseline_label={"current_weekend":"Weekend evidence","current_season_prior":"Current-season prior","generic_fallback":"Generic fallback","cached":"Saved search"}.get(baseline_context,"Driver-specific model")
+        baseline_label={"current_weekend":"Weekend evidence","current_season_prior":"FastF1 season prior","official_standings_prior":"Season strength prior","generic_fallback":"Generic fallback","cached":"Saved search"}.get(baseline_context,"Driver-specific model")
         baseline_grid = f"P{t_grid}" if "t_grid" in locals() else "—"
         baseline_pace = f"+{t_pace:.2f}s/lap" if "t_pace" in locals() else "—"
         st.markdown(
@@ -1636,6 +1702,6 @@ with st.expander("Low-confidence overrides",expanded=False):
             inventory[comp]["used"]=y.number_input("U",0,6,int(inventory[comp].get("used",0)),key=base+":u")
 
 st.markdown(
-    '<div class="footerline"><div>Strategy Engine V2.7 · Driver-specific Target Outcome.</div></div>',
+    '<div class="footerline"><div>Strategy Engine V2.7.1 · Driver-specific Target Outcome.</div></div>',
     unsafe_allow_html=True,
 )

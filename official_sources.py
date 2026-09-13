@@ -65,6 +65,65 @@ CURRENT_2026_DRIVERS = [
     "Sergio Perez", "Valtteri Bottas",
 ]
 
+
+# Current active 2026 field used only to build a driver-specific fallback model
+# when FastF1 weekend evidence is temporarily unavailable. Historical substitute
+# drivers can remain in CURRENT_2026_DRIVERS without expanding the simulated field.
+CURRENT_2026_ACTIVE_DRIVERS = [
+    "Kimi Antonelli", "George Russell", "Lewis Hamilton", "Lando Norris",
+    "Charles Leclerc", "Max Verstappen", "Oscar Piastri", "Isack Hadjar",
+    "Liam Lawson", "Pierre Gasly", "Arvid Lindblad", "Franco Colapinto",
+    "Oliver Bearman", "Gabriel Bortoleto", "Nico Hulkenberg", "Carlos Sainz",
+    "Alex Albon", "Esteban Ocon", "Fernando Alonso", "Lance Stroll",
+    "Valtteri Bottas", "Sergio Perez",
+]
+
+# Current-season fallback snapshot. The live official standings page is always
+# tried first; this snapshot exists only so the model never collapses every
+# driver to the same generic P10 / zero-pace prior if the site is unreachable.
+CURRENT_2026_STANDINGS_FALLBACK = [
+    {"position":1,"driver":"Kimi Antonelli","team":"Mercedes","points":267},
+    {"position":2,"driver":"George Russell","team":"Mercedes","points":201},
+    {"position":3,"driver":"Lewis Hamilton","team":"Ferrari","points":191},
+    {"position":4,"driver":"Lando Norris","team":"McLaren","points":171},
+    {"position":5,"driver":"Charles Leclerc","team":"Ferrari","points":155},
+    {"position":6,"driver":"Max Verstappen","team":"Red Bull Racing","points":127},
+    {"position":7,"driver":"Oscar Piastri","team":"McLaren","points":116},
+    {"position":8,"driver":"Isack Hadjar","team":"Red Bull Racing","points":71},
+    {"position":9,"driver":"Liam Lawson","team":"Racing Bulls","points":51},
+    {"position":10,"driver":"Pierre Gasly","team":"Alpine","points":41},
+    {"position":11,"driver":"Arvid Lindblad","team":"Racing Bulls","points":29},
+    {"position":12,"driver":"Franco Colapinto","team":"Alpine","points":21},
+    {"position":13,"driver":"Oliver Bearman","team":"Haas F1 Team","points":18},
+    {"position":14,"driver":"Gabriel Bortoleto","team":"Audi","points":10},
+    {"position":15,"driver":"Nico Hulkenberg","team":"Audi","points":6},
+    {"position":16,"driver":"Carlos Sainz","team":"Williams","points":6},
+    {"position":17,"driver":"Alex Albon","team":"Williams","points":5},
+    {"position":18,"driver":"Esteban Ocon","team":"Haas F1 Team","points":3},
+    {"position":19,"driver":"Fernando Alonso","team":"Aston Martin","points":3},
+    {"position":20,"driver":"Lance Stroll","team":"Aston Martin","points":0},
+    {"position":21,"driver":"Valtteri Bottas","team":"Cadillac","points":0},
+    {"position":22,"driver":"Sergio Perez","team":"Cadillac","points":0},
+]
+
+# Known current-season starting grids. Partial grids are merged with the season
+# prior for the remaining cars. This is especially useful when FastF1 has not yet
+# published the selected weekend through its data backend.
+CURRENT_2026_GRID_FALLBACKS = {
+    "spain": {
+        "Lando Norris": 1,
+        "Kimi Antonelli": 2,
+        "Max Verstappen": 3,
+        "Lewis Hamilton": 4,
+        "Charles Leclerc": 5,
+        "George Russell": 6,
+        "Oscar Piastri": 7,
+        "Liam Lawson": 8,
+        "Franco Colapinto": 9,
+        "Arvid Lindblad": 10,
+    },
+}
+
 PIRELLI_2026 = {
     "australia": {"hard": "C3", "medium": "C4", "soft": "C5", "source": "https://press.pirelli.com/complete-f1-tyre-range-for-the-first-three-grands-prix-of-2026/"},
     "china": {"hard": "C2", "medium": "C3", "soft": "C4", "source": "https://press.pirelli.com/complete-f1-tyre-range-for-the-first-three-grands-prix-of-2026/"},
@@ -199,6 +258,67 @@ class F1OfficialClient:
         except requests.RequestException:
             pass
         return list(CURRENT_2026_DRIVERS)
+
+    def driver_standings(self, year: int | None = None) -> list[dict[str, Any]]:
+        """Current-season driver standings, official page first, snapshot fallback second."""
+        year = int(year or self.current_year)
+        try:
+            r = self.session.get(f"{F1_BASE}/en/results/{year}/drivers", timeout=self.timeout)
+            if r.ok:
+                soup = BeautifulSoup(r.text, "html.parser")
+                rows = []
+                for tr in soup.find_all("tr"):
+                    txt = " ".join(tr.stripped_strings)
+                    if not txt:
+                        continue
+                    matched = next((d for d in CURRENT_2026_DRIVERS if d.lower() in txt.lower()), None)
+                    if not matched:
+                        continue
+                    cells = [" ".join(td.stripped_strings).strip() for td in tr.find_all(["td","th"])]
+                    nums = []
+                    for c in cells:
+                        cleaned = c.replace(",", ".").strip()
+                        if re.fullmatch(r"\d+(?:\.\d+)?", cleaned):
+                            nums.append(float(cleaned))
+                    if not nums:
+                        continue
+                    try:
+                        pos = int(nums[0])
+                    except Exception:
+                        continue
+                    pts = float(nums[-1]) if len(nums) >= 2 else 0.0
+                    fallback_team = next((x["team"] for x in CURRENT_2026_STANDINGS_FALLBACK if x["driver"] == matched), "")
+                    rows.append({"position":pos,"driver":matched,"team":fallback_team,"points":pts})
+                dedup = {r["driver"]: r for r in rows}
+                live = sorted(dedup.values(), key=lambda x: x["position"])
+                active = [r for r in live if r["driver"] in CURRENT_2026_ACTIVE_DRIVERS]
+                if year == 2026 and len(active) >= 18:
+                    return active[:22]
+        except requests.RequestException:
+            pass
+        if year == 2026:
+            return [dict(x) for x in CURRENT_2026_STANDINGS_FALLBACK]
+        return []
+
+    def event_grid_prior(self, event_key: str, standings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Merge any known event grid with a current-season strength prior."""
+        known = dict(CURRENT_2026_GRID_FALLBACKS.get(str(event_key), {}))
+        used = set(known)
+        next_pos = max(known.values(), default=0) + 1
+        order = []
+        for row in sorted(standings, key=lambda x: x.get("position", 999)):
+            driver = str(row.get("driver", ""))
+            if not driver or driver in used:
+                continue
+            while next_pos in known.values():
+                next_pos += 1
+            known[driver] = next_pos
+            next_pos += 1
+        for row in standings:
+            driver = str(row.get("driver", ""))
+            if driver in known:
+                order.append({**row, "grid_position": int(known[driver])})
+        return sorted(order, key=lambda x: x["grid_position"])
 
     def event_details(self, event: dict[str, Any]) -> dict[str, Any]:
         url = event.get("url") or f"{F1_BASE}/en/racing/{self.current_year}/{event['key']}"

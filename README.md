@@ -1,28 +1,20 @@
-# Strategy Engine — V2.7
+# Strategy Engine — V2.7.1
 
-V2.7 pushes the interface further toward a motorsport / pit-wall cockpit aesthetic while preserving the full V2.6.1 functionality.
+Target Outcome hotfix.
 
-## Visual changes
+## Fixed
 
-- carbon / telemetry-inspired background
-- stronger pit-wall masthead
-- checkered micro-details
-- animated start-light motif
-- angled / speed-line geometry
-- more aggressive race-control buttons
-- timing-screen styling for results and classification
-- stronger tyre colour treatment
-- telemetry-style tabs and controls
-- racing treatment also applied to Target Outcome
-
-## Functionality
-
-No simulation logic has been changed.
+- Target Outcome no longer collapses every driver to the same generic P10 / pace 0.0 fallback.
+- If FastF1 weekend evidence is unavailable, the app builds a driver-specific current-season strength prior.
+- For the 2026 Spanish GP, the known current-season starting-grid baseline is used for the top 10 and merged with the season prior for the rest of the field.
+- Target results are namespaced with a new model revision so stale 69% results from an older Streamlit session are invalidated.
+- If no driver-specific context can be built, Target Outcome now stops instead of showing a misleading generic probability.
 
 ## GitHub update
 
-Replace only:
+Replace:
 - `app.py`
+- `official_sources.py`
 - `README.md`
 
-Keep all other files from V2.6.1 unchanged.
+Keep `strategy_engine_v21.py` and `data_sources.py` unchanged from V2.7.
